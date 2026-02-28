@@ -1,0 +1,111 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// User profile
+model Profile {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  password      String   // Hashed password
+  name          String?
+  mode          String   @default("retail") // portfolio_manager, retail
+  balance       Float    @default(0) // € balance
+  tokensUsed    Int      @default(0) // Total tokens used
+  freeCredits   Float    @default(0.5) // €0.50 free credits
+  preferredProducts String @default("") // crypto,stocks,forex - comma separated
+  riskTolerance String   @default("medium") // low, medium, high
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  agents        Agent[]
+  predictions   Prediction[]
+  newsSources   NewsSource[]
+}
+
+model Agent {
+  id            String   @id @default(cuid())
+  userId        String
+  name          String
+  type          String   @default("spot") // spot, margin, futures
+  operationType String   @default("market") // market, sellStop, buyStop
+  status        String   @default("paused") // active, paused, inactive
+  model         String   // Model name (e.g., "MiniMax M2.5")
+  modelId       String   // Model ID for API
+  asset         String   // Asset symbol (e.g., "BTC/USDT")
+  assetId       String   // Asset ID for reference
+  assetType     String   // crypto, stocks, forex, etc.
+  prompt        String?
+  sources       String   @default("") // Comma-separated source IDs
+  tvSymbol      String   // TradingView symbol
+  provider      String   @default("BINANCE") // Chart provider
+  timeframe     String   @default("60") // 1, 5, 15, 60, 240, D, W
+  candleCount   Int      @default(50)
+  predictionsCount Int   @default(0)
+  lastPredictionAt DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  profile       Profile  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  predictions   Prediction[]
+
+  @@index([userId])
+}
+
+model Prediction {
+  id          String   @id @default(cuid())
+  userId      String
+  agentId     String
+  agentName   String
+  asset       String
+  tvSymbol    String
+  provider    String   @default("BINANCE")
+  direction   String   // LONG, SHORT, NEUTRAL
+  confidence  Int      // 1-100
+  entry       Float
+  stopLoss    Float
+  takeProfit  Float
+  riskReward  Float
+  analysis    String?
+  timeframe   String
+  tokensUsed  Int      @default(0) // Tokens used for this prediction
+  costEur     Float    @default(0) // Cost in €
+  createdAt   DateTime @default(now())
+
+  profile     Profile  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  agent       Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([agentId])
+}
+
+model NewsSource {
+  id          String   @id @default(cuid())
+  userId      String
+  sourceId    String   // coingecko-news, coindesk, etc.
+  name        String
+  url         String
+  category    String   // news, sentiment, indicators
+  enabled     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  profile     Profile  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, sourceId])
+  @@index([userId])
+}
+
+// Token pricing configuration
+model PricingConfig {
+  id              String @id @default(cuid())
+  pricePerMillion Float @default(3.5) // € per million tokens
+  updatedAt       DateTime @updatedAt
+}
