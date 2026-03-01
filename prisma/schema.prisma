@@ -6,8 +6,9 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider  = "postgresql"
   url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_DATABASE_URL")
 }
 
 // User profile
@@ -42,7 +43,7 @@ model Agent {
   asset         String   // Asset symbol (e.g., "BTC/USDT")
   assetId       String   // Asset ID for reference
   assetType     String   // crypto, stocks, forex, etc.
-  prompt        String?
+  prompt        String?  @db.Text
   sources       String   @default("") // Comma-separated source IDs
   tvSymbol      String   // TradingView symbol
   provider      String   @default("BINANCE") // Chart provider
@@ -75,7 +76,7 @@ model Prediction {
   stopLoss    Float
   takeProfit  Float
   riskReward  Float
-  analysis    String?
+  analysis    String?  @db.Text
   timeframe   String
   tokensUsed  Int      @default(0) // Tokens used for this prediction
   costEur     Float    @default(0) // Cost in €

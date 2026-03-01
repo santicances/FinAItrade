@@ -1,51 +1,57 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase, supabaseAdmin } from '@/lib/supabase'
+import { db } from '@/lib/db'
+
+// Helper to extract user ID from token
+function getUserIdFromToken(authHeader: string | null): string | null {
+  if (!authHeader?.startsWith('Bearer ')) return null
+  const token = authHeader.substring(7)
+  // Token format: local-{userId}-{timestamp}
+  const parts = token.split('-')
+  if (parts.length >= 2 && parts[0] === 'local') {
+    return parts[1]
+  }
+  return null
+}
 
 // GET - Fetch all agents for user
 export async function GET(request: NextRequest) {
   try {
-    const authHeader = request.headers.get('authorization')
+    const userId = getUserIdFromToken(request.headers.get('authorization'))
     
-    if (!authHeader?.startsWith('Bearer ')) {
+    if (!userId) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     }
 
-    const token = authHeader.substring(7)
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token)
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    }
-
-    const { data: agents, error } = await supabase
-      .from('agents')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
-
-    if (error) {
-      console.error('Fetch agents error:', error)
-      return NextResponse.json({ error: 'Error al obtener agentes' }, { status: 500 })
-    }
+    const agents = await db.agent.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' }
+    })
 
     // Transform to match frontend interface
-    const transformedAgents = agents?.map(a => ({
+    const transformedAgents = agents.map(a => ({
       id: a.id,
       name: a.name,
       type: a.type,
-      operationType: a.operation_type,
+      operationType: a.operationType,
       status: a.status,
       model: a.model,
-      modelId: a.model_id,
+      modelId: a.modelId,
       asset: a.asset,
-      assetId: a.asset_id,
-      assetType: a.asset_type,
+      assetId: a.assetId,
+      assetType: a.assetType,
       prompt: a.prompt || '',
-      tvSymbol: a.tv_symbol,
+      sources: a.sources,
+      tvSymbol: a.tvSymbol,
       provider: a.provider,
       timeframe: a.timeframe,
-      candleCount: a.candle_count
-    })) || []
+      candleCount: a.candleCount,
+      predictionType: a.predictionType,
+      isMultiPrediction: a.isMultiPrediction,
+      multiAssets: a.multiAssets,
+      predictionsCount: a.predictionsCount,
+      lastPredictionAt: a.lastPredictionAt,
+      createdAt: a.createdAt
+    }))
 
     return NextResponse.json({ agents: transformedAgents })
   } catch (error) {
@@ -57,21 +63,24 @@ export async function GET(request: NextRequest) {
 // POST - Create new agent
 export async function POST(request: NextRequest) {
   try {
-    const authHeader = request.headers.get('authorization')
+    const userId = getUserIdFromToken(request.headers.get('authorization'))
     
-    if (!authHeader?.startsWith('Bearer ')) {
+    if (!userId) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     }
 
-    const token = authHeader.substring(7)
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token)
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    // Verify user exists
+    const user = await db.profile.findUnique({ where: { id: userId } })
+    if (!user) {
+      return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 401 })
     }
 
     const body = await request.json()
-    const { name, type, operationType, model, modelId, asset, assetId, assetType, prompt, tvSymbol, provider, timeframe, candleCount } = body
+    const { 
+      name, type, operationType, model, modelId, asset, assetId, assetType, 
+      prompt, sources, tvSymbol, provider, timeframe, candleCount,
+      predictionType, isMultiPrediction, multiAssets
+    } = body
 
     if (!asset || !model) {
       return NextResponse.json({ error: 'Activo y modelo son requeridos' }, { status: 400 })
@@ -80,32 +89,29 @@ export async function POST(request: NextRequest) {
     // Use asset name as default if no name provided
     const agentName = name || asset
 
-    const { data: agent, error } = await supabase
-      .from('agents')
-      .insert({
-        user_id: user.id,
+    const agent = await db.agent.create({
+      data: {
+        userId,
         name: agentName,
         type: type || 'spot',
-        operation_type: operationType || 'market',
+        operationType: operationType || 'market',
         status: 'paused',
         model: model,
-        model_id: modelId,
+        modelId: modelId || model,
         asset: asset,
-        asset_id: assetId || '',
-        asset_type: assetType || 'crypto',
+        assetId: assetId || '',
+        assetType: assetType || 'crypto',
         prompt: prompt || '',
-        tv_symbol: tvSymbol || asset.replace('/', ''),
+        sources: sources || '',
+        tvSymbol: tvSymbol || asset.replace('/', ''),
         provider: provider || 'BINANCE',
         timeframe: timeframe || '60',
-        candle_count: candleCount || 50
-      })
-      .select()
-      .single()
-
-    if (error) {
-      console.error('Create agent error:', error)
-      return NextResponse.json({ error: 'Error al crear agente' }, { status: 500 })
-    }
+        candleCount: candleCount || 50,
+        predictionType: predictionType || 'swing',
+        isMultiPrediction: isMultiPrediction || false,
+        multiAssets: multiAssets || ''
+      }
+    })
 
     return NextResponse.json({
       success: true,
@@ -113,18 +119,23 @@ export async function POST(request: NextRequest) {
         id: agent.id,
         name: agent.name,
         type: agent.type,
-        operationType: agent.operation_type,
+        operationType: agent.operationType,
         status: agent.status,
         model: agent.model,
-        modelId: agent.model_id,
+        modelId: agent.modelId,
         asset: agent.asset,
-        assetId: agent.asset_id,
-        assetType: agent.asset_type,
+        assetId: agent.assetId,
+        assetType: agent.assetType,
         prompt: agent.prompt,
-        tvSymbol: agent.tv_symbol,
+        sources: agent.sources,
+        tvSymbol: agent.tvSymbol,
         provider: agent.provider,
         timeframe: agent.timeframe,
-        candleCount: agent.candle_count
+        candleCount: agent.candleCount,
+        predictionType: agent.predictionType,
+        isMultiPrediction: agent.isMultiPrediction,
+        multiAssets: agent.multiAssets,
+        createdAt: agent.createdAt
       }
     })
   } catch (error) {
@@ -133,14 +144,86 @@ export async function POST(request: NextRequest) {
   }
 }
 
+// PUT - Update agent
+export async function PUT(request: NextRequest) {
+  try {
+    const userId = getUserIdFromToken(request.headers.get('authorization'))
+    
+    if (!userId) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    }
+
+    const body = await request.json()
+    const { id, ...updateData } = body
+
+    if (!id) {
+      return NextResponse.json({ error: 'ID requerido' }, { status: 400 })
+    }
+
+    // Verify agent belongs to user
+    const existingAgent = await db.agent.findFirst({
+      where: { id, userId }
+    })
+
+    if (!existingAgent) {
+      return NextResponse.json({ error: 'Agente no encontrado' }, { status: 404 })
+    }
+
+    // Update agent
+    const agent = await db.agent.update({
+      where: { id },
+      data: {
+        name: updateData.name,
+        type: updateData.type,
+        operationType: updateData.operationType,
+        status: updateData.status,
+        model: updateData.model,
+        modelId: updateData.modelId,
+        prompt: updateData.prompt,
+        sources: updateData.sources,
+        timeframe: updateData.timeframe,
+        candleCount: updateData.candleCount,
+        predictionType: updateData.predictionType,
+        isMultiPrediction: updateData.isMultiPrediction,
+        multiAssets: updateData.multiAssets
+      }
+    })
+
+    return NextResponse.json({
+      success: true,
+      agent: {
+        id: agent.id,
+        name: agent.name,
+        type: agent.type,
+        operationType: agent.operationType,
+        status: agent.status,
+        model: agent.model,
+        modelId: agent.modelId,
+        asset: agent.asset,
+        assetId: agent.assetId,
+        assetType: agent.assetType,
+        prompt: agent.prompt,
+        sources: agent.sources,
+        tvSymbol: agent.tvSymbol,
+        provider: agent.provider,
+        timeframe: agent.timeframe,
+        candleCount: agent.candleCount
+      }
+    })
+  } catch (error) {
+    console.error('Update agent error:', error)
+    return NextResponse.json({ error: 'Error interno' }, { status: 500 })
+  }
+}
+
 // DELETE - Delete agent
 export async function DELETE(request: NextRequest) {
   try {
-    const authHeader = request.headers.get('authorization')
+    const userId = getUserIdFromToken(request.headers.get('authorization'))
     const { searchParams } = new URL(request.url)
     const id = searchParams.get('id')
     
-    if (!authHeader?.startsWith('Bearer ')) {
+    if (!userId) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     }
 
@@ -148,23 +231,18 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'ID requerido' }, { status: 400 })
     }
 
-    const token = authHeader.substring(7)
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token)
+    // Verify agent belongs to user
+    const existingAgent = await db.agent.findFirst({
+      where: { id, userId }
+    })
 
-    if (authError || !user) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    if (!existingAgent) {
+      return NextResponse.json({ error: 'Agente no encontrado' }, { status: 404 })
     }
 
-    const { error } = await supabase
-      .from('agents')
-      .delete()
-      .eq('id', id)
-      .eq('user_id', user.id)
-
-    if (error) {
-      console.error('Delete agent error:', error)
-      return NextResponse.json({ error: 'Error al eliminar agente' }, { status: 500 })
-    }
+    await db.agent.delete({
+      where: { id }
+    })
 
     return NextResponse.json({ success: true })
   } catch (error) {

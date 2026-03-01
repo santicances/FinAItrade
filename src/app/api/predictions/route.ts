@@ -1,52 +1,53 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { db } from '@/lib/db'
+
+// Helper to extract user ID from token
+function getUserIdFromToken(authHeader: string | null): string | null {
+  if (!authHeader?.startsWith('Bearer ')) return null
+  const token = authHeader.substring(7)
+  // Token format: local-{userId}-{timestamp}
+  const parts = token.split('-')
+  if (parts.length >= 2 && parts[0] === 'local') {
+    return parts[1]
+  }
+  return null
+}
 
 // GET - Fetch all predictions for user
 export async function GET(request: NextRequest) {
   try {
-    const authHeader = request.headers.get('authorization')
+    const userId = getUserIdFromToken(request.headers.get('authorization'))
     
-    if (!authHeader?.startsWith('Bearer ')) {
+    if (!userId) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     }
 
-    const token = authHeader.substring(7)
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token)
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    }
-
-    const { data: predictions, error } = await supabase
-      .from('predictions')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
-      .limit(50)
-
-    if (error) {
-      console.error('Fetch predictions error:', error)
-      return NextResponse.json({ error: 'Error al obtener predicciones' }, { status: 500 })
-    }
+    const predictions = await db.prediction.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: 50
+    })
 
     // Transform to match frontend interface
-    const transformedPredictions = predictions?.map(p => ({
+    const transformedPredictions = predictions.map(p => ({
       id: p.id,
-      agentId: p.agent_id,
-      agentName: p.agent_name,
+      agentId: p.agentId,
+      agentName: p.agentName,
       asset: p.asset,
-      tvSymbol: p.tv_symbol,
+      tvSymbol: p.tvSymbol,
       provider: p.provider,
       direction: p.direction,
       confidence: p.confidence,
       entry: p.entry,
-      stopLoss: p.stop_loss,
-      takeProfit: p.take_profit,
-      riskReward: p.risk_reward,
+      stopLoss: p.stopLoss,
+      takeProfit: p.takeProfit,
+      riskReward: p.riskReward,
       analysis: p.analysis,
       timeframe: p.timeframe,
-      createdAt: p.created_at
-    })) || []
+      tokensUsed: p.tokensUsed,
+      costEur: p.costEur,
+      createdAt: p.createdAt
+    }))
 
     return NextResponse.json({ predictions: transformedPredictions })
   } catch (error) {
@@ -58,85 +59,90 @@ export async function GET(request: NextRequest) {
 // POST - Save prediction
 export async function POST(request: NextRequest) {
   try {
-    const authHeader = request.headers.get('authorization')
+    const userId = getUserIdFromToken(request.headers.get('authorization'))
     
-    if (!authHeader?.startsWith('Bearer ')) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    }
-
-    const token = authHeader.substring(7)
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token)
-
-    if (authError || !user) {
+    if (!userId) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     }
 
     const body = await request.json()
-    const { agentId, agentName, asset, tvSymbol, provider, direction, confidence, entry, stopLoss, takeProfit, riskReward, analysis, timeframe, tokensUsed } = body
+    const { 
+      agentId, agentName, asset, tvSymbol, provider, 
+      direction, confidence, entry, stopLoss, takeProfit, 
+      riskReward, analysis, timeframe, tokensUsed, costEur 
+    } = body
 
-    const { data: prediction, error } = await supabase
-      .from('predictions')
-      .insert({
-        user_id: user.id,
-        agent_id: agentId,
-        agent_name: agentName,
+    // Get pricing config
+    const pricing = await db.pricingConfig.findFirst()
+    const pricePerMillion = pricing?.pricePerMillion || 3.5
+    const calculatedCostEur = costEur || ((tokensUsed || 0) / 1000000) * pricePerMillion
+
+    const prediction = await db.prediction.create({
+      data: {
+        userId,
+        agentId: agentId || null,
+        agentName: agentName || 'Manual',
         asset: asset,
-        tv_symbol: tvSymbol,
+        tvSymbol: tvSymbol || asset?.replace('/', '') || '',
         provider: provider || 'BINANCE',
-        direction: direction,
-        confidence: confidence,
-        entry: entry,
-        stop_loss: stopLoss,
-        take_profit: takeProfit,
-        risk_reward: riskReward,
-        analysis: analysis,
-        timeframe: timeframe
-      })
-      .select()
-      .single()
+        direction: direction || 'NEUTRAL',
+        confidence: confidence || 50,
+        entry: entry || 0,
+        stopLoss: stopLoss || 0,
+        takeProfit: takeProfit || 0,
+        riskReward: riskReward || 0,
+        analysis: analysis || '',
+        timeframe: timeframe || '60',
+        tokensUsed: tokensUsed || 0,
+        costEur: calculatedCostEur
+      }
+    })
 
-    if (error) {
-      console.error('Save prediction error:', error)
-      return NextResponse.json({ error: 'Error al guardar predicción' }, { status: 500 })
-    }
-
-    // Update tokens used if provided
-    if (tokensUsed) {
-      await supabase.rpc('increment_tokens_used', {
-        user_id: user.id,
-        tokens: tokensUsed
-      }).catch(() => {
-        // Fallback: direct update
-        supabase
-          .from('profiles')
-          .update({ 
-            tokens_used: supabase.rpc('increment', { 
-              column: 'tokens_used', 
-              value: tokensUsed 
-            })
-          })
-          .eq('user_id', user.id)
+    // Update user tokens used and balance if tokens were used
+    if (tokensUsed && tokensUsed > 0) {
+      await db.profile.update({
+        where: { id: userId },
+        data: {
+          tokensUsed: {
+            increment: tokensUsed
+          }
+        }
       })
+
+      // Update agent prediction count if agentId provided
+      if (agentId) {
+        await db.agent.update({
+          where: { id: agentId },
+          data: {
+            predictionsCount: {
+              increment: 1
+            },
+            lastPredictionAt: new Date()
+          }
+        })
+      }
     }
 
     return NextResponse.json({
       success: true,
       prediction: {
         id: prediction.id,
-        agentId: prediction.agent_id,
-        agentName: prediction.agent_name,
+        agentId: prediction.agentId,
+        agentName: prediction.agentName,
         asset: prediction.asset,
-        tvSymbol: prediction.tv_symbol,
+        tvSymbol: prediction.tvSymbol,
         provider: prediction.provider,
         direction: prediction.direction,
         confidence: prediction.confidence,
         entry: prediction.entry,
-        stopLoss: prediction.stop_loss,
-        takeProfit: prediction.take_profit,
-        riskReward: prediction.risk_reward,
+        stopLoss: prediction.stopLoss,
+        takeProfit: prediction.takeProfit,
+        riskReward: prediction.riskReward,
         analysis: prediction.analysis,
         timeframe: prediction.timeframe,
-        createdAt: prediction.created_at
+        tokensUsed: prediction.tokensUsed,
+        costEur: prediction.costEur,
+        createdAt: prediction.createdAt
       }
     })
   } catch (error) {
@@ -148,11 +154,11 @@ export async function POST(request: NextRequest) {
 // DELETE - Delete prediction
 export async function DELETE(request: NextRequest) {
   try {
-    const authHeader = request.headers.get('authorization')
+    const userId = getUserIdFromToken(request.headers.get('authorization'))
     const { searchParams } = new URL(request.url)
     const id = searchParams.get('id')
     
-    if (!authHeader?.startsWith('Bearer ')) {
+    if (!userId) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     }
 
@@ -160,23 +166,18 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'ID requerido' }, { status: 400 })
     }
 
-    const token = authHeader.substring(7)
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token)
+    // Verify prediction belongs to user
+    const existingPrediction = await db.prediction.findFirst({
+      where: { id, userId }
+    })
 
-    if (authError || !user) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    if (!existingPrediction) {
+      return NextResponse.json({ error: 'Predicción no encontrada' }, { status: 404 })
     }
 
-    const { error } = await supabase
-      .from('predictions')
-      .delete()
-      .eq('id', id)
-      .eq('user_id', user.id)
-
-    if (error) {
-      console.error('Delete prediction error:', error)
-      return NextResponse.json({ error: 'Error al eliminar predicción' }, { status: 500 })
-    }
+    await db.prediction.delete({
+      where: { id }
+    })
 
     return NextResponse.json({ success: true })
   } catch (error) {

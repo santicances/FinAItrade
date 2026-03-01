@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createUser, findUserByEmail } from '@/lib/storage'
+import { db } from '@/lib/db'
+import bcrypt from 'bcryptjs'
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,7 +14,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if user already exists
-    const existingUser = findUserByEmail(email)
+    const existingUser = await db.profile.findUnique({
+      where: { email: email.toLowerCase() }
+    })
+
     if (existingUser) {
       return NextResponse.json(
         { error: 'Este email ya está registrado' },
@@ -21,15 +25,34 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Create user
-    const user = createUser(email, password, name || email.split('@')[0])
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 10)
+
+    // Create user in database
+    const user = await db.profile.create({
+      data: {
+        email: email.toLowerCase(),
+        password: hashedPassword,
+        name: name || email.split('@')[0],
+        mode: 'retail',
+        balance: 0,
+        tokensUsed: 0,
+        freeCredits: 0.5,
+        preferredProducts: '',
+        riskTolerance: 'medium'
+      }
+    })
 
     return NextResponse.json({
       success: true,
       user: {
         id: user.id,
         email: user.email,
-        name: user.name
+        name: user.name,
+        mode: user.mode,
+        balance: user.balance,
+        tokensUsed: user.tokensUsed,
+        freeCredits: user.freeCredits
       }
     })
   } catch (error) {

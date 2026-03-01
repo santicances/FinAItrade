@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import bcrypt from 'bcryptjs'
 
+// Storage API - handles all data operations with Supabase/PostgreSQL via Prisma
+
 // Price per million tokens: €3.5
 const PRICE_PER_MILLION_TOKENS = 3.5
 

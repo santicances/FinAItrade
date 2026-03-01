@@ -7018,7 +7018,10 @@ function Dashboard({ mode: initialMode, initialProducts, onLogout, user: propUse
         operationType: agent.operationType,
         timeframe: agent.timeframe,
         candleCount: agent.candleCount,
-        predictionType: agent.predictionType || 'swing'
+        predictionType: agent.predictionType || 'swing',
+        userId: user?.id || null,
+        agentId: agent.id,
+        agentName: agent.name
       }
       
       console.log('🔍 Sending prediction request:', requestBody)
@@ -7124,10 +7127,21 @@ function Dashboard({ mode: initialMode, initialProducts, onLogout, user: propUse
         addPredictionLog(agent.id, `📊 Confianza: ${newPrediction.confidence}% | R:R: ${newPrediction.riskReward.toFixed(2)}`)
         addPredictionLog(agent.id, `💾 Guardando predicción...`)
         
-        setUser(prev => ({
-          ...prev,
-          tokensUsed: prev.tokensUsed + (data.usage?.total_tokens || 0)
-        }))
+        // Update user stats from API response
+        if (data.userBalance) {
+          setUser(prev => ({
+            ...prev,
+            tokensUsed: data.userBalance.tokensUsed,
+            balance: data.userBalance.balance,
+            freeCredits: data.userBalance.freeCredits
+          }))
+          addPredictionLog(agent.id, `💰 Coste: €${(data.costEur || 0).toFixed(4)} | Tokens: ${data.usage?.total_tokens || 0}`)
+        } else {
+          setUser(prev => ({
+            ...prev,
+            tokensUsed: prev.tokensUsed + (data.usage?.total_tokens || 0)
+          }))
+        }
         
         addPredictionLog(agent.id, `✅ ¡Predicción completada!`)
         

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { findUserByEmail } from '@/lib/storage'
+import { db } from '@/lib/db'
+import bcrypt from 'bcryptjs'
 
 export async function POST(request: NextRequest) {
   try {
@@ -12,10 +13,22 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Find user
-    const user = findUserByEmail(email)
+    // Find user in database
+    const user = await db.profile.findUnique({
+      where: { email: email.toLowerCase() }
+    })
     
-    if (!user || user.password !== password) {
+    if (!user) {
+      return NextResponse.json(
+        { error: 'Credenciales inválidas' },
+        { status: 401 }
+      )
+    }
+
+    // Verify password
+    const isValidPassword = await bcrypt.compare(password, user.password)
+    
+    if (!isValidPassword) {
       return NextResponse.json(
         { error: 'Credenciales inválidas' },
         { status: 401 }
@@ -28,9 +41,12 @@ export async function POST(request: NextRequest) {
         id: user.id,
         email: user.email,
         name: user.name,
-        credits: user.credits,
+        mode: user.mode,
+        balance: user.balance,
+        tokensUsed: user.tokensUsed,
         freeCredits: user.freeCredits,
-        tokensUsed: user.tokensUsed
+        preferredProducts: user.preferredProducts,
+        riskTolerance: user.riskTolerance
       },
       session: {
         access_token: `local-${user.id}-${Date.now()}`,

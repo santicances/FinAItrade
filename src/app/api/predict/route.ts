@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import ZAI from 'z-ai-web-dev-sdk'
+import { db } from '@/lib/db'
+
+// Price per million tokens in EUR
+const PRICE_PER_MILLION_TOKENS = 3.5
 
 // Initialize ZAI instance
 let zaiInstance: Awaited<ReturnType<typeof ZAI.create>> | null = null
@@ -396,7 +400,7 @@ REGLAS CRÍTICAS:
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { asset, model, operationType, timeframe, candleCount, customPrompt, sources } = body
+    const { asset, model, operationType, timeframe, candleCount, customPrompt, sources, userId, agentId, agentName } = body
 
     if (!asset || !model) {
       return NextResponse.json(
@@ -559,11 +563,92 @@ Basándote en TODOS estos datos, genera un análisis profesional con puntos de e
         }
       }
       
+      // Calculate token usage and cost
+      const tokensUsed = completion.usage?.total_tokens || 0
+      const costEur = (tokensUsed / 1000000) * PRICE_PER_MILLION_TOKENS
+
+      // Save prediction to database and update user tokens if userId provided
+      let savedPrediction = null
+      let updatedUser = null
+      
+      if (userId) {
+        try {
+          // Save prediction
+          savedPrediction = await db.prediction.create({
+            data: {
+              userId,
+              agentId: agentId || null,
+              agentName: agentName || 'Manual Prediction',
+              asset,
+              tvSymbol: asset.replace('/', ''),
+              provider: 'BINANCE',
+              direction: prediction.signal?.direction || 'NEUTRAL',
+              confidence: prediction.analysis?.confidence || 50,
+              entry: prediction.signal?.entry?.price || currentPrice,
+              stopLoss: prediction.signal?.stopLoss?.price || 0,
+              takeProfit: prediction.signal?.takeProfit?.price || 0,
+              riskReward: prediction.signal?.riskRewardRatio || 1.5,
+              analysis: prediction.recommendation || '',
+              timeframe: timeframe || '60',
+              tokensUsed,
+              costEur
+            }
+          })
+
+          // Update user tokens and balance
+          const user = await db.profile.findUnique({ where: { id: userId } })
+          if (user) {
+            let newBalance = user.balance
+            let newFreeCredits = user.freeCredits
+            let newTokensUsed = user.tokensUsed + tokensUsed
+
+            // Deduct from free credits first, then balance
+            if (user.freeCredits >= costEur) {
+              newFreeCredits = user.freeCredits - costEur
+            } else {
+              const remaining = costEur - user.freeCredits
+              newFreeCredits = 0
+              newBalance = Math.max(0, user.balance - remaining)
+            }
+
+            updatedUser = await db.profile.update({
+              where: { id: userId },
+              data: {
+                tokensUsed: newTokensUsed,
+                balance: newBalance,
+                freeCredits: newFreeCredits
+              }
+            })
+
+            // Update agent prediction count if agentId provided
+            if (agentId) {
+              await db.agent.update({
+                where: { id: agentId },
+                data: {
+                  predictionsCount: { increment: 1 },
+                  lastPredictionAt: new Date()
+                }
+              })
+            }
+          }
+        } catch (dbError) {
+          console.error('Database save error:', dbError)
+          // Continue even if save fails
+        }
+      }
+
       return NextResponse.json({
         success: true,
         prediction,
         model: aiModel,
-        usage: completion.usage || { total_tokens: 0 },
+        usage: { total_tokens: tokensUsed },
+        costEur,
+        savedToDb: !!savedPrediction,
+        userBalance: updatedUser ? {
+          balance: updatedUser.balance,
+          freeCredits: updatedUser.freeCredits,
+          tokensUsed: updatedUser.tokensUsed
+        } : null,
         generatedAt: new Date().toISOString(),
         dataSource: {
           price: marketType === 'crypto' ? 'coingecko' : 'estimated',
