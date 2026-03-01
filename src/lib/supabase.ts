@@ -1,26 +1,21 @@
 import { createClient } from '@supabase/supabase-js'
 
-// Usamos variables de entorno, pero con un fallback de string vacío para que el Build de Vercel no falle
+// USAR SOLO LAS VARIABLES DE ENTORNO. NO PONGAS LAS LLAVES REALES AQUÍ.
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 
-// Verificación simple para desarrollo (opcional)
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn("⚠️ Supabase: Las variables de entorno no están configuradas correctamente.")
-}
+// Fallback seguro para que el Build no explote
+const fallbackUrl = 'https://placeholder-project.supabase.co'
 
-// Client for browser (uses anon key)
-// Agregamos una validación mínima para que el constructor de Supabase no lance el error "Key is required"
 export const supabase = createClient(
-  supabaseUrl || 'https://placeholder.supabase.co',
-  supabaseAnonKey || 'placeholder'
+  supabaseUrl || fallbackUrl,
+  supabaseAnonKey || 'placeholder-key'
 )
 
-// Admin client for server operations (uses service role key)
 export const supabaseAdmin = createClient(
-  supabaseUrl || 'https://placeholder.supabase.co',
-  supabaseServiceKey || 'placeholder',
+  supabaseUrl || fallbackUrl,
+  supabaseServiceKey || 'placeholder-key',
   {
     auth: {
       autoRefreshToken: false,
@@ -28,7 +23,6 @@ export const supabaseAdmin = createClient(
     }
   }
 )
-
 // --- Tus Tipos (Se mantienen igual) ---
 export type Json =
   | string
