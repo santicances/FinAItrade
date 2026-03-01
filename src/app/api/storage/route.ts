@@ -40,7 +40,13 @@ export async function GET(request: NextRequest) {
         where: { userId },
         orderBy: { createdAt: 'desc' }
       })
-      return NextResponse.json({ agents })
+      // Parse comma-separated fields back into arrays
+      const parsedAgents = agents.map(agent => ({
+        ...agent,
+        sources: agent.sources ? agent.sources.split(',').filter(Boolean) : [],
+        multiAssets: agent.multiAssets ? agent.multiAssets.split(',').filter(Boolean) : []
+      }))
+      return NextResponse.json({ agents: parsedAgents })
     }
 
     if (action === 'getPredictions' && userId) {
@@ -193,7 +199,13 @@ export async function POST(request: NextRequest) {
       }
       
       let agent
-      if (agentData.id && !agentData.id.startsWith('agent-') && !agentData.id.startsWith('user-')) {
+      // Check if this is an existing agent (has valid DB id, not a temp id)
+      const isExistingAgent = agentData.id && 
+        !agentData.id.startsWith('agent-') && 
+        !agentData.id.startsWith('user-') &&
+        !agentData.id.startsWith('temp-')
+      
+      if (isExistingAgent) {
         // Update existing agent
         agent = await db.agent.update({
           where: { id: agentData.id },
@@ -212,7 +224,10 @@ export async function POST(request: NextRequest) {
             tvSymbol: agentData.tvSymbol,
             provider: agentData.provider || 'BINANCE',
             timeframe: agentData.timeframe,
-            candleCount: agentData.candleCount
+            candleCount: agentData.candleCount,
+            predictionType: agentData.predictionType || 'swing',
+            isMultiPrediction: agentData.isMultiPrediction || false,
+            multiAssets: Array.isArray(agentData.multiAssets) ? agentData.multiAssets.join(',') : agentData.multiAssets || ''
           }
         })
       } else {
@@ -234,7 +249,10 @@ export async function POST(request: NextRequest) {
             tvSymbol: agentData.tvSymbol,
             provider: agentData.provider || 'BINANCE',
             timeframe: agentData.timeframe || '60',
-            candleCount: agentData.candleCount || 50
+            candleCount: agentData.candleCount || 50,
+            predictionType: agentData.predictionType || 'swing',
+            isMultiPrediction: agentData.isMultiPrediction || false,
+            multiAssets: Array.isArray(agentData.multiAssets) ? agentData.multiAssets.join(',') : agentData.multiAssets || ''
           }
         })
       }
@@ -275,35 +293,37 @@ export async function POST(request: NextRequest) {
       const prediction = await db.prediction.create({
         data: {
           userId: userProfile.id,
-          agentId: predData.agentId,
-          agentName: predData.agentName,
+          agentId: predData.agentId || null,  // Optional
+          agentName: predData.agentName || 'AI Prediction',
           asset: predData.asset,
-          tvSymbol: predData.tvSymbol,
+          tvSymbol: predData.tvSymbol || predData.asset?.replace('/', ''),
           provider: predData.provider || 'BINANCE',
           direction: predData.direction,
           confidence: predData.confidence || 50,
-          entry: predData.entry,
-          stopLoss: predData.stopLoss,
-          takeProfit: predData.takeProfit,
+          entry: predData.entry || 0,
+          stopLoss: predData.stopLoss || 0,
+          takeProfit: predData.takeProfit || 0,
           riskReward: predData.riskReward || 1.5,
           analysis: predData.analysis || '',
-          timeframe: predData.timeframe,
+          timeframe: predData.timeframe || '60',
           tokensUsed: predData.tokensUsed || 0,
           costEur: predData.costEur || 0
         }
       })
 
-      // Update agent prediction count
-      try {
-        await db.agent.update({
-          where: { id: predData.agentId },
-          data: {
-            predictionsCount: { increment: 1 },
-            lastPredictionAt: new Date()
-          }
-        })
-      } catch {
-        // Agent might not exist, ignore error
+      // Update agent prediction count if agentId provided
+      if (predData.agentId) {
+        try {
+          await db.agent.update({
+            where: { id: predData.agentId },
+            data: {
+              predictionsCount: { increment: 1 },
+              lastPredictionAt: new Date()
+            }
+          })
+        } catch {
+          // Agent might not exist, ignore error
+        }
       }
 
       return NextResponse.json({ success: true, prediction })

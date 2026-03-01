@@ -166,3 +166,505 @@ html {
   width: 100% !important;
   height: 100% !important;
 }
+
+/* ========================================
+   LANDING PAGE ANIMATIONS
+   ======================================== */
+
+/* 1. Floating Particles Animation */
+@keyframes float-up {
+  0% {
+    transform: translateY(100vh) scale(0);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-100vh) scale(1);
+    opacity: 0;
+  }
+}
+
+.particle {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  background: linear-gradient(135deg, #10B981, #14B8A6);
+  border-radius: 50%;
+  animation: float-up linear infinite;
+  opacity: 0;
+  box-shadow: 0 0 10px #10B981, 0 0 20px #10B981;
+}
+
+/* 2. Fade In Slide Up Animation */
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(40px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 0.8s ease-out forwards;
+}
+
+.animate-fade-in-up-delay-1 {
+  animation: fade-in-up 0.8s ease-out 0.2s forwards;
+  opacity: 0;
+}
+
+.animate-fade-in-up-delay-2 {
+  animation: fade-in-up 0.8s ease-out 0.4s forwards;
+  opacity: 0;
+}
+
+.animate-fade-in-up-delay-3 {
+  animation: fade-in-up 0.8s ease-out 0.6s forwards;
+  opacity: 0;
+}
+
+.animate-fade-in-up-delay-4 {
+  animation: fade-in-up 0.8s ease-out 0.8s forwards;
+  opacity: 0;
+}
+
+/* 3. Counter/Number Animation */
+@keyframes count-up {
+  from {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-count {
+  animation: count-up 0.6s ease-out forwards;
+}
+
+/* 4. Glow Pulse Animation */
+@keyframes glow-pulse {
+  0%, 100% {
+    box-shadow: 0 0 5px rgba(16, 185, 129, 0.5),
+                0 0 10px rgba(16, 185, 129, 0.3),
+                0 0 15px rgba(16, 185, 129, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 10px rgba(16, 185, 129, 0.8),
+                0 0 20px rgba(16, 185, 129, 0.5),
+                0 0 30px rgba(16, 185, 129, 0.3);
+  }
+}
+
+.animate-glow {
+  animation: glow-pulse 2s ease-in-out infinite;
+}
+
+/* Hover Glow Effect */
+.hover-glow {
+  transition: all 0.3s ease;
+}
+
+.hover-glow:hover {
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.4),
+              0 0 40px rgba(16, 185, 129, 0.2),
+              0 0 60px rgba(16, 185, 129, 0.1);
+  transform: translateY(-4px);
+}
+
+/* 5. Shimmer/Gradient Animation */
+@keyframes shimmer {
+  0% {
+    background-position: -200% center;
+  }
+  100% {
+    background-position: 200% center;
+  }
+}
+
+.animate-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(16, 185, 129, 0) 0%,
+    rgba(16, 185, 129, 0.3) 50%,
+    rgba(16, 185, 129, 0) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 3s ease-in-out infinite;
+}
+
+/* Text Gradient Animation */
+@keyframes text-gradient {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+.animate-text-gradient {
+  background: linear-gradient(90deg, #10B981, #14B8A6, #06B6D4, #10B981);
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: text-gradient 4s ease infinite;
+}
+
+/* Floating Animation for Icons */
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+/* Spin Slow Animation */
+@keyframes spin-slow {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin-slow {
+  animation: spin-slow 20s linear infinite;
+}
+
+/* Scale In Animation */
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-scale-in {
+  animation: scale-in 0.5s ease-out forwards;
+}
+
+/* Radar/Ping Animation */
+@keyframes ping-slow {
+  75%, 100% {
+    transform: scale(2);
+    opacity: 0;
+  }
+}
+
+.animate-ping-slow {
+  animation: ping-slow 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+/* Background Grid Animation */
+@keyframes grid-move {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: 50px 50px;
+  }
+}
+
+.animate-grid {
+  background-image: 
+    linear-gradient(rgba(16, 185, 129, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(16, 185, 129, 0.03) 1px, transparent 1px);
+  background-size: 50px 50px;
+  animation: grid-move 4s linear infinite;
+}
+
+/* Typewriter Effect */
+@keyframes typewriter {
+  from {
+    width: 0;
+  }
+  to {
+    width: 100%;
+  }
+}
+
+.animate-typewriter {
+  overflow: hidden;
+  white-space: nowrap;
+  animation: typewriter 2s steps(40) forwards;
+}
+
+/* ========================================
+   PROFESSIONAL IMPROVEMENTS - FUTURISTIC STYLES
+   ======================================== */
+
+/* Holographic Card Effect */
+@keyframes holographic {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+.holographic-card {
+  background: linear-gradient(
+    135deg,
+    rgba(16, 185, 129, 0.1) 0%,
+    rgba(20, 184, 166, 0.05) 25%,
+    rgba(6, 182, 212, 0.1) 50%,
+    rgba(20, 184, 166, 0.05) 75%,
+    rgba(16, 185, 129, 0.1) 100%
+  );
+  background-size: 200% 200%;
+  animation: holographic 8s ease infinite;
+}
+
+/* Neon Glow Effect */
+.neon-glow {
+  box-shadow: 
+    0 0 5px rgba(16, 185, 129, 0.3),
+    0 0 10px rgba(16, 185, 129, 0.2),
+    0 0 20px rgba(16, 185, 129, 0.1),
+    inset 0 0 10px rgba(16, 185, 129, 0.05);
+}
+
+.neon-glow:hover {
+  box-shadow: 
+    0 0 10px rgba(16, 185, 129, 0.5),
+    0 0 20px rgba(16, 185, 129, 0.3),
+    0 0 40px rgba(16, 185, 129, 0.2),
+    inset 0 0 15px rgba(16, 185, 129, 0.1);
+}
+
+/* Glassmorphism Panel */
+.glass-panel {
+  background: rgba(15, 23, 42, 0.7);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* Data Stream Animation */
+@keyframes data-stream {
+  0% {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  10%{
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100%{
+    transform: translateY(100%);
+    opacity: 0;
+  }
+}
+
+.data-stream{
+  animation: data-stream 3s linear infinite;
+}
+
+/* Pulse Ring Effect */
+@keyframes pulse-ring {
+  0%{
+    transform: scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(2);
+    opacity: 0;
+  }
+}
+
+.pulse-ring{
+  animation: pulse-ring 1.5s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+}
+
+/* Live Data Indicator */
+@keyframes live-pulse{
+  0%, 100%{
+    opacity: 1;
+    transform: scale(1);
+  }
+  50%{
+    opacity: 0.7;
+    transform: scale(1.1);
+  }
+}
+
+.live-indicator {
+  animation: live-pulse 2s ease-in-out infinite;
+}
+
+/* Professional Card Hover */
+.pro-card {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.pro-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 
+    0 10px 40px -15px rgba(16, 185, 129, 0.3),
+    0 0 0 1px rgba(16, 185, 129, 0.2);
+}
+
+/* Stat Counter Animation */
+@keyframes stat-pop {
+  0%{
+    transform: scale(0.8);
+    opacity: 0;
+  }
+  50%{
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.stat-pop {
+  animation: stat-pop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+/* Risk Level Colors */
+.risk-low {
+  --risk-color: #10B981;
+}
+
+.risk-medium{
+  --risk-color: #F59E0B;
+}
+
+.risk-high{
+  --risk-color: #EF4444;
+}
+
+/* Progress Bar Animated */
+@keyframes progress-flow{
+  0%{
+    background-position: 0% 50%;
+  }
+  100%{
+    background-position: 100% 50%;
+  }
+}
+
+.progress-animated{
+  background: linear-gradient(
+    90deg,
+    var(--risk-color, #10B981) 0%,
+    rgba(16, 185, 129, 0.5) 50%,
+    var(--risk-color, #10B981) 100%
+  );
+  background-size: 200% 100%;
+  animation: progress-flow 2s linear infinite;
+}
+
+/* Notification Badge Pulse */
+@keyframes notification-pulse {
+  0%, 100%{
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+  }
+  50%{
+    box-shadow: 0 0 0 8px rgba(239, 68, 68, 0);
+  }
+}
+
+.notification-badge{
+  animation: notification-pulse 1.5s infinite;
+}
+
+/* Keyboard Shortcut Key Style */
+.kbd-key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 8px;
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-weight: 500;
+  line-height: 1;
+  color: #e2e8f0;
+  background: linear-gradient(180deg, #334155 0%, #1e293b 100%);
+  border: 1px solid #475569;
+  border-radius: 6px;
+  box-shadow: 
+    0 2px 0 #0f172a,
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+/* Chart Line Animation */
+@keyframes chart-draw{
+  from{
+    stroke-dashoffset: 1000;
+  }
+  to{
+    stroke-dashoffset: 0;
+  }
+}
+
+.chart-line-animated{
+  stroke-dasharray: 1000;
+  animation: chart-draw 2s ease forwards;
+}
+
+/* Data Grid Effect */
+.data-grid {
+  background-image: 
+    linear-gradient(rgba(16, 185, 129, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(16, 185, 129, 0.03) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+/* Scrollbar Styling for Professional Look */
+.professional-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.professional-scrollbar::-webkit-scrollbar-track{
+  background: rgba(15, 23, 42, 0.5);
+  border-radius: 3px;
+}
+
+.professional-scrollbar::-webkit-scrollbar-thumb{
+  background: rgba(16, 185, 129, 0.3);
+  border-radius: 3px;
+}
+
+.professional-scrollbar::-webkit-scrollbar-thumb:hover{
+  background: rgba(16, 185, 129, 0.5);
+}
+
+/* Data Table Styling */
+.data-table-row {
+  transition: all 0.2s ease;
+}
+
+.data-table-row:hover{
+  background: rgba(16, 185, 129, 0.05);
+}

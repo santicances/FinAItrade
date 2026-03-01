@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-const OPENROUTER_API_KEY = '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'
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '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'
 const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1'
 
 // Modelos disponibles en OpenRouter - IDs verificados
