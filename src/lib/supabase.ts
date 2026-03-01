@@ -1,21 +1,23 @@
 import { createClient } from '@supabase/supabase-js'
 
-// USAR SOLO LAS VARIABLES DE ENTORNO. NO PONGAS LAS LLAVES REALES AQUÍ.
+// 1. Extraemos las variables (Vercel las inyectará en producción)
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 
-// Fallback seguro para que el Build no explote
-const fallbackUrl = 'https://placeholder-project.supabase.co'
+// 2. Creamos una URL de respaldo para que el constructor no de error durante el BUILD
+const fallbackUrl = 'https://your-project.supabase.co'
 
+// Cliente para el navegador
 export const supabase = createClient(
   supabaseUrl || fallbackUrl,
-  supabaseAnonKey || 'placeholder-key'
+  supabaseAnonKey || 'placeholder'
 )
 
+// Cliente Admin (Service Role)
 export const supabaseAdmin = createClient(
   supabaseUrl || fallbackUrl,
-  supabaseServiceKey || 'placeholder-key',
+  supabaseServiceKey || 'placeholder',
   {
     auth: {
       autoRefreshToken: false,
