@@ -1,21 +1,35 @@
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://hxgzvdjupioyplamdafe.supabase.co'
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_GbcO39yL5TVVN1AwCcfulg_c6q8VeQk'
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 'sb_secret_c_WZN4wWKj717ZxNpITZqg_KVQy3xaz'
+// Usamos variables de entorno, pero con un fallback de string vacío para que el Build de Vercel no falle
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+
+// Verificación simple para desarrollo (opcional)
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.warn("⚠️ Supabase: Las variables de entorno no están configuradas correctamente.")
+}
 
 // Client for browser (uses anon key)
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+// Agregamos una validación mínima para que el constructor de Supabase no lance el error "Key is required"
+export const supabase = createClient(
+  supabaseUrl || 'https://placeholder.supabase.co',
+  supabaseAnonKey || 'placeholder'
+)
 
 // Admin client for server operations (uses service role key)
-export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
-  auth: {
-    autoRefreshToken: false,
-    persistSession: false
+export const supabaseAdmin = createClient(
+  supabaseUrl || 'https://placeholder.supabase.co',
+  supabaseServiceKey || 'placeholder',
+  {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    }
   }
-})
+)
 
-// Types for our database
+// --- Tus Tipos (Se mantienen igual) ---
 export type Json =
   | string
   | number
