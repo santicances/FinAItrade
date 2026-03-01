@@ -8,9 +8,8 @@ generator client {
 datasource db {
   provider  = "postgresql"
   url      = env("DATABASE_URL")
-  directUrl = env("DIRECT_DATABASE_URL")
-  // For local development without DIRECT_DATABASE_URL, it will use DATABASE_URL
-  // In production (Vercel), set both DATABASE_URL (pooler) and DIRECT_DATABASE_URL (direct)
+  // directUrl is optional - Prisma will use url for both queries and migrations
+  // For production with Supabase, you can add DIRECT_DATABASE_URL env var pointing to port 5432
 }
 
 // User profile
