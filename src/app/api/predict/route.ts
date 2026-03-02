@@ -47,14 +47,14 @@ const ASSET_PRICES: Record<string, number> = {
 // Market type detection
 function getMarketType(symbol: string): 'crypto' | 'stocks' | 'forex' | 'commodities' | 'indices' | 'etfs' {
   const base = symbol.replace('/USDT', '').replace('/USD', '').replace('/', '').toUpperCase()
-  
+
   if (COINGECKO_IDS[base]) return 'crypto'
   if (['AAPL', 'NVDA', 'MSFT', 'GOOGL', 'AMZN', 'META', 'TSLA', 'JPM', 'V', 'JNJ'].includes(base)) return 'stocks'
   if (symbol.includes('/') && ['EUR', 'GBP', 'USD', 'JPY', 'AUD', 'CAD', 'CHF', 'NZD'].some(c => symbol.includes(c))) return 'forex'
   if (['XAU', 'XAG', 'GOLD', 'SILVER', 'WTI', 'BRENT', 'NG', 'CU'].includes(base)) return 'commodities'
   if (['SPX', 'DJI', 'IXIC', 'RUT', 'DAX', 'FTSE', 'CAC', 'NIKKEI', 'HSI', 'SX5E'].includes(base)) return 'indices'
   if (['SPY', 'QQQ', 'GLD', 'IWM', 'EEM', 'VTI', 'TLT', 'SLV', 'VWO', 'UVXY'].includes(base)) return 'etfs'
-  
+
   return 'crypto' // Default
 }
 
@@ -85,7 +85,7 @@ function SMA(data: number[], period: number): number[] {
 function EMA(data: number[], period: number): number[] {
   const result: number[] = []
   const multiplier = 2 / (period + 1)
-  
+
   for (let i = 0; i < data.length; i++) {
     if (i === 0) {
       result.push(data[i])
@@ -100,17 +100,17 @@ function RSI(closes: number[], period: number = 14): number[] {
   const result: number[] = []
   let gains = 0
   let losses = 0
-  
+
   for (let i = 0; i < closes.length; i++) {
     if (i === 0) {
       result.push(NaN)
       continue
     }
-    
+
     const change = closes[i] - closes[i - 1]
     const gain = change > 0 ? change : 0
     const loss = change < 0 ? Math.abs(change) : 0
-    
+
     if (i < period) {
       gains += gain
       losses += loss
@@ -137,12 +137,12 @@ function RSI(closes: number[], period: number = 14): number[] {
 function MACD(closes: number[]): { macd: number[], signal: number[], histogram: number[] } {
   const ema12 = EMA(closes, 12)
   const ema26 = EMA(closes, 26)
-  
+
   const macd = ema12.map((v, i) => v - ema26[i])
   const signal = EMA(macd.filter(v => !isNaN(v)), 9)
   const paddedSignal = [...Array(macd.length - signal.length).fill(NaN), ...signal]
   const histogram = macd.map((v, i) => v - paddedSignal[i])
-  
+
   return { macd, signal: paddedSignal, histogram }
 }
 
@@ -150,7 +150,7 @@ function BollingerBands(closes: number[], period: number = 20, stdDev: number = 
   const middle = SMA(closes, period)
   const upper: number[] = []
   const lower: number[] = []
-  
+
   for (let i = 0; i < closes.length; i++) {
     if (i < period - 1) {
       upper.push(NaN)
@@ -164,32 +164,32 @@ function BollingerBands(closes: number[], period: number = 20, stdDev: number = 
       lower.push(mean - stdDev * std)
     }
   }
-  
+
   return { upper, middle, lower }
 }
 
 function findSupportResistance(candles: Candle[]): { support: number[], resistance: number[] } {
   const support: number[] = []
   const resistance: number[] = []
-  
+
   for (let i = 2; i < candles.length - 2; i++) {
     const low = candles[i].low
     const high = candles[i].high
-    
-    if (low < candles[i-1].low && low < candles[i-2].low && 
-        low < candles[i+1].low && low < candles[i+2].low) {
+
+    if (low < candles[i - 1].low && low < candles[i - 2].low &&
+      low < candles[i + 1].low && low < candles[i + 2].low) {
       support.push(low)
     }
-    
-    if (high > candles[i-1].high && high > candles[i-2].high && 
-        high > candles[i+1].high && high > candles[i+2].high) {
+
+    if (high > candles[i - 1].high && high > candles[i - 2].high &&
+      high > candles[i + 1].high && high > candles[i + 2].high) {
       resistance.push(high)
     }
   }
-  
-  return { 
-    support: support.slice(-5).sort((a, b) => b - a), 
-    resistance: resistance.slice(-5).sort((a, b) => a - b) 
+
+  return {
+    support: support.slice(-5).sort((a, b) => b - a),
+    resistance: resistance.slice(-5).sort((a, b) => a - b)
   }
 }
 
@@ -201,13 +201,13 @@ async function fetchCryptoOHLCV(coinId: string, days: number = 7): Promise<Candl
       `https://api.coingecko.com/api/v3/coins/${coinId}/ohlc?vs_currency=usd&days=${days}`,
       { next: { revalidate: 60 } }
     )
-    
+
     if (!response.ok) {
       return []
     }
-    
+
     const data = await response.json()
-    
+
     return data.map((candle: number[]) => ({
       time: candle[0],
       open: candle[1],
@@ -225,14 +225,14 @@ async function fetchCryptoOHLCV(coinId: string, days: number = 7): Promise<Candl
 async function getCryptoPrice(symbol: string): Promise<{ price: number; change24h?: number; marketCap?: number; volume?: number }> {
   const baseSymbol = symbol.replace('/USDT', '').replace('/USD', '').replace('/', '').toUpperCase()
   const coinId = COINGECKO_IDS[baseSymbol]
-  
+
   if (coinId) {
     try {
       const response = await fetch(
         `https://api.coingecko.com/api/v3/coins/${coinId}?localization=false&tickers=false&community_data=false&developer_data=false`,
         { next: { revalidate: 60 } }
       )
-      
+
       if (response.ok) {
         const data = await response.json()
         return {
@@ -246,7 +246,7 @@ async function getCryptoPrice(symbol: string): Promise<{ price: number; change24
       console.error('Price fetch error:', error)
     }
   }
-  
+
   return { price: ASSET_PRICES[baseSymbol] || 100 }
 }
 
@@ -254,7 +254,7 @@ async function fetchMarketNews(symbol: string): Promise<string> {
   try {
     const zai = await getZAI()
     const marketType = getMarketType(symbol)
-    
+
     const queries: Record<string, string> = {
       'crypto': `${symbol} cryptocurrency price analysis today`,
       'stocks': `${symbol} stock price analysis earnings`,
@@ -263,12 +263,12 @@ async function fetchMarketNews(symbol: string): Promise<string> {
       'indices': `${symbol} index market analysis`,
       'etfs': `${symbol} ETF fund flow analysis`
     }
-    
+
     const results = await zai.functions.invoke('web_search', {
       query: queries[marketType] || `${symbol} price analysis`,
       num: 5
     })
-    
+
     return results.slice(0, 3).map((r: any) => `- ${r.name}: ${r.snippet}`).join('\n')
   } catch (error) {
     console.error('News fetch error:', error)
@@ -281,17 +281,17 @@ function generateTechnicalAnalysis(candles: Candle[]): string {
   if (candles.length < 20) {
     return 'Datos insuficientes para análisis técnico completo.'
   }
-  
+
   const closes = candles.map(c => c.close)
   const currentPrice = closes[closes.length - 1]
-  
+
   const sma20 = SMA(closes, 20)
   const sma50 = SMA(closes, Math.min(50, closes.length))
   const rsi = RSI(closes, 14)
   const macd = MACD(closes)
   const bb = BollingerBands(closes, 20)
   const sr = findSupportResistance(candles)
-  
+
   const currentSMA20 = sma20[sma20.length - 1]
   const currentSMA50 = sma50[sma50.length - 1]
   const currentRSI = rsi[rsi.length - 1]
@@ -299,22 +299,22 @@ function generateTechnicalAnalysis(candles: Candle[]): string {
   const currentSignal = macd.signal[macd.signal.length - 1]
   const currentBBUpper = bb.upper[bb.upper.length - 1]
   const currentBBLower = bb.lower[bb.lower.length - 1]
-  
+
   let trend = 'LATERAL'
   if (currentPrice > currentSMA20 && currentSMA20 > currentSMA50) {
     trend = 'ALCISTA'
   } else if (currentPrice < currentSMA20 && currentSMA20 < currentSMA50) {
     trend = 'BAJISTA'
   }
-  
+
   let rsiSignal = 'NEUTRAL'
   if (currentRSI < 30) rsiSignal = 'SOBREVENDIDO'
   else if (currentRSI > 70) rsiSignal = 'SOBRECOMPRADO'
-  
+
   let macdSignal = 'NEUTRAL'
   if (currentMACD > currentSignal) macdSignal = 'ALCISTA'
   else if (currentMACD < currentSignal) macdSignal = 'BAJISTA'
-  
+
   return `
 === ANÁLISIS TÉCNICO ===
 
@@ -412,12 +412,12 @@ export async function POST(request: NextRequest) {
     const baseSymbol = asset.replace('/USDT', '').replace('/USD', '').replace('/', '').toUpperCase()
     const coinId = COINGECKO_IDS[baseSymbol]
     const marketType = getMarketType(asset)
-    
+
     // Fetch data based on market type
     let priceData = { price: ASSET_PRICES[baseSymbol] || ASSET_PRICES[asset] || 100, change24h: 0 }
     let ohlcvData: Candle[] = []
     let newsContent = ''
-    
+
     if (marketType === 'crypto' && coinId) {
       [priceData, ohlcvData, newsContent] = await Promise.all([
         getCryptoPrice(asset),
@@ -428,16 +428,16 @@ export async function POST(request: NextRequest) {
       // For non-crypto, fetch news and use simulated data
       newsContent = await fetchMarketNews(asset)
     }
-    
+
     const currentPrice = priceData.price
     const change24h = priceData.change24h || 0
     const marketCap = priceData.marketCap
     const volume = priceData.volume
-    
+
     // Generate technical analysis
     let technicalAnalysis = ''
     let candlesAnalyzed = ohlcvData.length
-    
+
     if (ohlcvData.length > 20) {
       technicalAnalysis = generateTechnicalAnalysis(ohlcvData)
     } else {
@@ -477,9 +477,6 @@ ${customPrompt ? `Instrucciones del usuario: ${customPrompt}` : ''}
 Basándote en TODOS estos datos, genera un análisis profesional con puntos de entrada, stop loss y take profit específicos.
 `
 
-    // Use ZAI for AI prediction
-    const zai = await getZAI()
-    
     // Map model ID to ZAI model
     const modelMap: Record<string, string> = {
       'openai/gpt-4o': 'openai/gpt-4o',
@@ -488,10 +485,13 @@ Basándote en TODOS estos datos, genera un análisis profesional con puntos de e
       'minimax/minimax-m2.5': 'minimax/minimax-m2.5',
       'x-ai/grok-4.1-fast': 'x-ai/grok-beta',
     }
-    
+
     const aiModel = modelMap[model] || 'deepseek/deepseek-chat'
-    
+
     try {
+      // Use ZAI for AI prediction
+      const zai = await getZAI()
+
       const completion = await zai.chat.completions.create({
         model: aiModel,
         messages: [
@@ -503,17 +503,17 @@ Basándote en TODOS estos datos, genera un análisis profesional con puntos de e
       })
 
       const content = completion.choices?.[0]?.message?.content || ''
-      
+
       let prediction
       try {
         const cleanContent = content.replace(/```json\n?|\n?```/g, '').trim()
         prediction = JSON.parse(cleanContent)
-        
+
         // Validate and adjust prices
         if (prediction.signal?.entry?.price && Math.abs(prediction.signal.entry.price - currentPrice) / currentPrice > 0.05) {
           prediction.signal.entry.price = currentPrice
         }
-        
+
         // Ensure required fields
         if (!prediction.signal?.direction) {
           prediction.signal = prediction.signal || {}
@@ -524,31 +524,31 @@ Basándote en TODOS estos datos, genera un análisis profesional con puntos de e
         }
         if (!prediction.signal?.stopLoss?.price) {
           const dir = prediction.signal?.direction || 'LONG'
-          prediction.signal.stopLoss = { 
-            price: currentPrice * (dir === 'LONG' ? 0.97 : 1.03), 
-            percentage: 3, 
-            reason: 'SL calculado 3%' 
+          prediction.signal.stopLoss = {
+            price: currentPrice * (dir === 'LONG' ? 0.97 : 1.03),
+            percentage: 3,
+            reason: 'SL calculado 3%'
           }
         }
         if (!prediction.signal?.takeProfit?.price) {
           const dir = prediction.signal?.direction || 'LONG'
-          prediction.signal.takeProfit = { 
-            price: currentPrice * (dir === 'LONG' ? 1.06 : 0.94), 
-            percentage: 6, 
-            reason: 'TP calculado 6%' 
+          prediction.signal.takeProfit = {
+            price: currentPrice * (dir === 'LONG' ? 1.06 : 0.94),
+            percentage: 6,
+            reason: 'TP calculado 6%'
           }
         }
-        
+
       } catch (parseError) {
         console.error('JSON parse error:', parseError)
         const direction = change24h > 0 ? 'LONG' : 'SHORT'
-        
+
         prediction = {
           asset,
           currentPrice,
-          analysis: { 
-            trend: change24h > 0 ? 'alcista' : 'bajista', 
-            confidence: 65, 
+          analysis: {
+            trend: change24h > 0 ? 'alcista' : 'bajista',
+            confidence: 65,
             reasons: ['Análisis generado con datos de mercado'],
             indicators: { rsi: 'Calculado', macd: 'Calculado', movingAverages: 'Calculadas' }
           },
@@ -562,7 +562,7 @@ Basándote en TODOS estos datos, genera un análisis profesional con puntos de e
           recommendation: `Análisis para ${asset}: Tendencia ${change24h > 0 ? 'alcista' : 'bajista'} con entrada en $${currentPrice.toFixed(currentPrice < 1 ? 6 : 2)}.`
         }
       }
-      
+
       // Calculate token usage and cost
       const tokensUsed = completion.usage?.total_tokens || 0
       const costEur = (tokensUsed / 1000000) * PRICE_PER_MILLION_TOKENS
@@ -570,7 +570,7 @@ Basándote en TODOS estos datos, genera un análisis profesional con puntos de e
       // Save prediction to database and update user tokens if userId provided
       let savedPrediction = null
       let updatedUser = null
-      
+
       if (userId) {
         try {
           // Save prediction
@@ -668,19 +668,19 @@ Basándote en TODOS estos datos, genera un análisis profesional con puntos de e
         },
         technicalAnalysis: technicalAnalysis.slice(0, 1000)
       })
-      
+
     } catch (aiError) {
       console.error('AI Error:', aiError)
-      
+
       // Generate prediction based on technical analysis
       const direction = change24h > 0 ? 'LONG' : 'SHORT'
-      
+
       const prediction = {
         asset,
         currentPrice,
-        analysis: { 
-          trend: change24h > 0 ? 'alcista' : 'bajista', 
-          confidence: 60, 
+        analysis: {
+          trend: change24h > 0 ? 'alcista' : 'bajista',
+          confidence: 60,
           timeframe: timeframeLabel,
           reasons: [
             `Precio actual: $${currentPrice.toFixed(currentPrice < 1 ? 6 : 2)}`,
@@ -696,25 +696,25 @@ Basándote en TODOS estos datos, genera un análisis profesional con puntos de e
         },
         signal: {
           direction,
-          entry: { 
-            price: currentPrice, 
-            reason: 'Precio actual de mercado' 
+          entry: {
+            price: currentPrice,
+            reason: 'Precio actual de mercado'
           },
-          stopLoss: { 
-            price: currentPrice * (direction === 'LONG' ? 0.97 : 1.03), 
-            percentage: 3, 
-            reason: 'SL conservador 3% basado en volatilidad' 
+          stopLoss: {
+            price: currentPrice * (direction === 'LONG' ? 0.97 : 1.03),
+            percentage: 3,
+            reason: 'SL conservador 3% basado en volatilidad'
           },
-          takeProfit: { 
-            price: currentPrice * (direction === 'LONG' ? 1.06 : 0.94), 
-            percentage: 6, 
-            reason: 'TP conservador 6% (ratio R:R 2.0)' 
+          takeProfit: {
+            price: currentPrice * (direction === 'LONG' ? 1.06 : 0.94),
+            percentage: 6,
+            reason: 'TP conservador 6% (ratio R:R 2.0)'
           },
           riskRewardRatio: 2.0
         },
         recommendation: `Análisis técnico para ${asset} (${marketType}): Tendencia ${change24h > 0 ? 'alcista' : 'bajista'} con cambio 24h de ${change24h.toFixed(2)}%. Entrada sugerida en $${currentPrice.toFixed(currentPrice < 1 ? 6 : 2)}.`
       }
-      
+
       return NextResponse.json({
         success: true,
         prediction,

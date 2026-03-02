@@ -45,6 +45,17 @@ export async function POST(request: NextRequest) {
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}))
       console.error('OpenRouter API Error:', errorData)
+
+      // Fallback para cuando la API Key es inválida o el usuario no existe
+      if (response.status === 401 || response.status === 403 || errorData.error?.message === 'User not found.') {
+        return NextResponse.json({
+          success: true,
+          content: "⚠️ **Modo Simulación Activo**\n\nNo he podido conectarme con el modelo de IA real porque la API Key de OpenRouter configurada en la aplicación es inválida o ha expirado (Error: User not found).\n\nPara que funcionen las respuestas reales del agente, por favor actualiza la variable `OPENROUTER_API_KEY` en `src/app/api/chat/route.ts` o usa un `.env`.\n\nMientras tanto, puedes seguir probando la plataforma de manera simulada.",
+          model: "simulated-fallback",
+          usage: { total_tokens: 0 },
+        })
+      }
+
       return NextResponse.json(
         { error: errorData.error?.message || 'Error calling OpenRouter API' },
         { status: response.status }
@@ -52,7 +63,7 @@ export async function POST(request: NextRequest) {
     }
 
     const data = await response.json()
-    
+
     return NextResponse.json({
       success: true,
       content: data.choices[0]?.message?.content || '',
