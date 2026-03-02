@@ -6,10 +6,9 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
-  url      = env("DATABASE_URL")
-  // directUrl is optional - Prisma will use url for both queries and migrations
-  // For production with Supabase, you can add DIRECT_DATABASE_URL env var pointing to port 5432
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  directUrl   = env("DIRECT_DATABASE_URL")
 }
 
 // User profile
