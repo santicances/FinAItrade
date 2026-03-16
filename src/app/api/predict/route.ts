@@ -45,7 +45,7 @@ const ASSET_PRICES: Record<string, number> = {
 }
 
 // Market type detection
-function getMarketType(symbol: string): 'crypto' | 'stocks' | 'forex' | 'commodities' | 'indices' | 'etfs' {
+function getMarketType(symbol: string): 'crypto' | 'stocks' | 'forex' | 'commodities' | 'indices' | 'etfs' | 'prediction_market' {
   const base = symbol.replace('/USDT', '').replace('/USD', '').replace('/', '').toUpperCase()
 
   if (COINGECKO_IDS[base]) return 'crypto'
@@ -54,6 +54,7 @@ function getMarketType(symbol: string): 'crypto' | 'stocks' | 'forex' | 'commodi
   if (['XAU', 'XAG', 'GOLD', 'SILVER', 'WTI', 'BRENT', 'NG', 'CU'].includes(base)) return 'commodities'
   if (['SPX', 'DJI', 'IXIC', 'RUT', 'DAX', 'FTSE', 'CAC', 'NIKKEI', 'HSI', 'SX5E'].includes(base)) return 'indices'
   if (['SPY', 'QQQ', 'GLD', 'IWM', 'EEM', 'VTI', 'TLT', 'SLV', 'VWO', 'UVXY'].includes(base)) return 'etfs'
+  if (symbol.includes('POLYMARKET') || base.includes('TRUMP') || base.includes('ELECTION')) return 'prediction_market'
 
   return 'crypto' // Default
 }
@@ -395,12 +396,17 @@ REGLAS CRÍTICAS:
 3. Para LONG: SL por debajo del entry, TP por encima
 4. Para SHORT: SL por encima del entry, TP por debajo
 5. El ratio riesgo/beneficio debe ser mínimo 1.5
-6. Si el RSI indica sobrecompra, considera SHORT; si indica sobreventa, considera LONG`
+6. PARA MERCADOS DE PREDICCIÓN (Polymarket):
+   - LONG equivale a apostar por "SÍ" (Yes).
+   - SHORT equivale a apostar por "NO".
+   - El precio representa la probabilidad (de 0 a 1, donde 0.50 es 50%).
+   - Ignora indicadores de trading tradicionales si no aplican; enfócate en la probabilidad y noticias.
+7. Si el RSI indica sobrecompra, considera SHORT; si indica sobreventa, considera LONG`
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { asset, model, operationType, timeframe, candleCount, customPrompt, sources, userId, agentId, agentName } = body
+    const { asset, model, operationType, timeframe, candleCount, customPrompt, sources, userId, agentId, agentName, tvSymbol, provider } = body
 
     if (!asset || !model) {
       return NextResponse.json(
@@ -414,7 +420,7 @@ export async function POST(request: NextRequest) {
     const marketType = getMarketType(asset)
 
     // Fetch data based on market type
-    let priceData = { price: ASSET_PRICES[baseSymbol] || ASSET_PRICES[asset] || 100, change24h: 0 }
+    let priceData: { price: number; change24h?: number; marketCap?: number; volume?: number } = { price: ASSET_PRICES[baseSymbol] || ASSET_PRICES[asset] || 100, change24h: 0 }
     let ohlcvData: Candle[] = []
     let newsContent = ''
 
@@ -424,6 +430,26 @@ export async function POST(request: NextRequest) {
         fetchCryptoOHLCV(coinId, 7),
         fetchMarketNews(asset)
       ])
+    } else if (marketType === 'prediction_market') {
+      // Simulate Polymarket data
+      const probabilities: Record<string, number> = {
+        'Trump 2024': 0.62,
+        'BTC $100K Q4': 0.75,
+        'Fed Cut Nov': 0.92,
+        'SOL ETF 2025': 0.25
+      }
+      const prob = probabilities[asset] || 0.50
+      priceData = { price: prob, change24h: Math.random() * 5 - 2 }
+      newsContent = await fetchMarketNews(asset)
+      // Simulate some "probabilistic" OHLCV data
+      ohlcvData = Array.from({ length: 30 }, (_, i) => ({
+        time: Math.floor(Date.now() / 1000) - (30 - i) * 86400,
+        open: prob + (Math.random() - 0.5) * 0.1,
+        high: prob + Math.random() * 0.1,
+        low: prob - Math.random() * 0.1,
+        close: prob + (Math.random() - 0.5) * 0.05,
+        volume: Math.random() * 1000000
+      }))
     } else {
       // For non-crypto, fetch news and use simulated data
       newsContent = await fetchMarketNews(asset)
@@ -568,10 +594,10 @@ Basándote en TODOS estos datos, genera un análisis profesional con puntos de e
       const costEur = (tokensUsed / 1000000) * PRICE_PER_MILLION_TOKENS
 
       // Save prediction to database and update user tokens if userId provided
-      let savedPrediction = null
-      let updatedUser = null
+      let savedPrediction: any = null
+      let updatedUser: any = null
 
-      if (userId) {
+      if (userId && !userId.startsWith('guest-')) {
         try {
           // Save prediction
           savedPrediction = await db.prediction.create({
@@ -580,8 +606,8 @@ Basándote en TODOS estos datos, genera un análisis profesional con puntos de e
               agentId: agentId || null,
               agentName: agentName || 'Manual Prediction',
               asset,
-              tvSymbol: asset.replace('/', ''),
-              provider: 'BINANCE',
+              tvSymbol: tvSymbol || asset.replace('/', ''),
+              provider: provider || 'BINANCE',
               direction: prediction.signal?.direction || 'NEUTRAL',
               confidence: prediction.analysis?.confidence || 50,
               entry: prediction.signal?.entry?.price || currentPrice,

@@ -1,0 +1,36 @@
+[project]
+name = "finaItrade-backend"
+version = "0.1.0"
+description = "FinAI Trade - FastAPI Backend for AI Trading Model Training"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "pydantic>=2.9.0",
+    "pydantic-settings>=2.6.0",
+    "python-multipart>=0.0.12",
+    "pandas>=2.2.3",
+    "numpy>=1.26.0",
+    "scikit-learn>=1.6.1",
+    "tensorflow>=2.17.0",
+    "matplotlib>=3.8.0",
+    "ccxt>=4.3.41",
+    "backtrader>=1.9.78.123",
+    "tqdm>=4.66.5",
+    "Pillow>=11.1.0",
+    "python-dotenv>=1.0.0",
+    "aiofiles>=24.1.0",
+    "websockets>=13.0",
+    "redis>=5.2.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.24.0",
+    "httpx>=0.27.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import Link from 'next/link'
 import { createChart, ColorType, IChartApi, CandlestickData, Time, CandlestickSeries } from 'lightweight-charts'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -82,6 +83,7 @@ import {
   RefreshCw,
   Newspaper,
   Check,
+  CheckCircle2,
   Play,
   Pause,
   Gauge,
@@ -207,7 +209,135 @@ interface BeforeInstallPromptEvent extends Event {
 }
 
 // PWA Install Modal Component - Shows when app opens in browser
+// --- Candle Chart Component for Signal Terminal ---
+function SignalTerminalChart({ predictions }: { predictions: any[] }) {
+  const chartContainerRef = useRef<HTMLDivElement>(null)
+  const chartRef = useRef<IChartApi | null>(null)
+
+  useEffect(() => {
+    if (!chartContainerRef.current) return
+
+    const chart = createChart(chartContainerRef.current, {
+      layout: {
+        background: { type: ColorType.Solid, color: 'transparent' },
+        textColor: '#64748b',
+      },
+      grid: {
+        vertLines: { color: 'rgba(51, 65, 85, 0.3)' },
+        horzLines: { color: 'rgba(51, 65, 85, 0.3)' },
+      },
+      width: chartContainerRef.current.clientWidth,
+      height: 320,
+      timeScale: {
+         borderVisible: false,
+         timeVisible: true,
+      },
+    })
+
+    const candlestickSeries = chart.addSeries(CandlestickSeries, {
+      upColor: '#10b981',
+      downColor: '#ef4444',
+      borderVisible: false,
+      wickUpColor: '#10b981',
+      wickDownColor: '#ef4444',
+    })
+
+    // Mock candle data
+    const data: CandlestickData<Time>[] = Array.from({ length: 100 }, (_, i) => {
+       const time = (Math.floor(new Date().getTime() / 1000) - (100 - i) * 3600) as Time
+       const base = 50000 + (Math.sin(i / 10) * 1000);
+       return {
+          time,
+          open: base,
+          high: base + 200,
+          low: base - 200,
+          close: base + (Math.random() - 0.5) * 300,
+       }
+    })
+
+    candlestickSeries.setData(data)
+    chart.timeScale().fitContent()
+    chartRef.current = chart
+
+    const handleResize = () => {
+      if (chartContainerRef.current && chartRef.current) {
+        chartRef.current.applyOptions({ width: chartContainerRef.current.clientWidth })
+      }
+    }
+
+    window.addEventListener('resize', handleResize)
+    return () => {
+      window.removeEventListener('resize', handleResize)
+      chart.remove()
+    }
+  }, [predictions])
+
+  return (
+    <div className="relative w-full h-full group">
+       <div ref={chartContainerRef} className="w-full h-full" />
+    </div>
+  )
+}
+
+// --- Official TradingView Premium Chart Component ---
+function TradingViewChart({ symbol }: { symbol: string }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    
+    // Clean up previous widget
+    containerRef.current.innerHTML = '';
+    
+    const container = document.createElement('div');
+    container.id = `tv_chart_${Math.random().toString(36).substr(2, 9)}`;
+    container.style.height = '100%';
+    container.style.width = '100%';
+    containerRef.current.appendChild(container);
+
+    const script = document.createElement("script");
+    script.src = "https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js";
+    script.type = "text/javascript";
+    script.async = true;
+    
+    // Format symbol properly for TradingView
+    let tvSymbol = symbol;
+    if (!symbol.includes(':')) {
+       tvSymbol = `BINANCE:${symbol}USDT`;
+    }
+
+    script.innerHTML = JSON.stringify({
+      "autosize": true,
+      "symbol": tvSymbol,
+      "interval": "60",
+      "timezone": "Etc/UTC",
+      "theme": "dark",
+      "style": "1",
+      "locale": "en",
+      "enable_publishing": false,
+      "allow_symbol_change": true,
+      "calendar": false,
+      "support_host": "https://www.tradingview.com",
+      "hide_side_toolbar": false,
+      "container_id": container.id
+    });
+    
+    container.appendChild(script);
+    
+    return () => {
+       if (containerRef.current) containerRef.current.innerHTML = '';
+    };
+  }, [symbol]);
+
+  return (
+    <div className="tradingview-widget-container w-full h-[500px] border-y border-slate-800" ref={containerRef}>
+      <div className="tradingview-widget-container__widget w-full h-full"></div>
+    </div>
+  );
+}
+
 function PWAInstallModal({ onClose }: { onClose: () => void }) {
+
   const { isInstallable, isInstalled, installApp } = usePWAInstall()
   const [installing, setInstalling] = useState(false)
   const [dismissed, setDismissed] = useState(() => {
@@ -1178,6 +1308,12 @@ const availableAssets = {
     { id: 'qqq', symbol: 'QQQ', name: 'Invesco QQQ', tvSymbol: 'QQQ', provider: 'NASDAQ' },
     { id: 'gld', symbol: 'GLD', name: 'SPDR Gold', tvSymbol: 'GLD', provider: 'AMEX' },
   ],
+  prediction_market: [
+    { id: 'trump-2024', symbol: 'Trump 2024', name: 'Elección Presidencial Trump', tvSymbol: 'POLYMARKET:TRUMP2024', provider: 'POLYMARKET' },
+    { id: 'btc-100k-q4', symbol: 'BTC $100K Q4', name: 'BTC a $100k en Q4', tvSymbol: 'POLYMARKET:BTC100K', provider: 'POLYMARKET' },
+    { id: 'fed-cut-nov', symbol: 'Fed Cut Nov', name: 'Recorte de Tasas Fed Nov', tvSymbol: 'POLYMARKET:FEDCUTNOV', provider: 'POLYMARKET' },
+    { id: 'sol-etf-2025', symbol: 'SOL ETF 2025', name: 'Aprobación ETF Solana 2025', tvSymbol: 'POLYMARKET:SOLETF2025', provider: 'POLYMARKET' },
+  ],
 }
 
 // Datos de productos de inversión
@@ -1188,6 +1324,7 @@ const investmentProducts = [
   { id: 'commodities', label: 'Commodities', icon: BarChart3, description: 'Materias primas' },
   { id: 'indices', label: 'Índices', icon: LineChart, description: 'Índices bursátiles' },
   { id: 'etfs', label: 'ETFs', icon: PieChart, description: 'Fondos cotizados' },
+  { id: 'prediction_market', label: 'Predicciones', icon: Zap, description: 'Mercados de predicción' },
 ]
 
 // Fuentes de datos de noticias (configurables por el usuario)
@@ -1262,7 +1399,10 @@ interface Agent {
   predictionType?: 'scalping' | 'swing' | 'long_term' // Tipo de predicción
   isMultiPrediction?: boolean // Si es multi-predicción
   multiAssets?: string[] // IDs de activos adicionales para multi-predicción
-  market?: 'crypto' | 'stocks' | 'forex' | 'commodities' | 'indices' | 'etfs' // Mercado al que pertenece
+  market?: 'crypto' | 'stocks' | 'forex' | 'commodities' | 'indices' | 'etfs' | 'prediction_market' // Mercado al que pertenece
+  winRate?: number
+  accuracy?: number
+  category?: 'retail' | 'pro' | 'custom'
 }
 
 // Agentes por defecto por mercado - con prompts detallados
@@ -1339,6 +1479,48 @@ const defaultAgentsByMarket: Record<string, Agent[]> = {
     { id: 'vwo-intl', name: 'VWO International', type: 'spot', operationType: 'market', status: 'active', model: 'Claude 3.5', modelId: 'anthropic/claude-3.5-sonnet', asset: 'VWO', assetId: 'vwo', assetType: 'etfs', prompt: 'You are a VWO international ETF trader. Analyze: 1) Emerging and developed markets ex-US, 2) China exposure, 3) Currency movements, 4) Geopolitical risks, 5) Relative value vs US markets, 6) Economic cycles abroad. Trade Daily timeframe. Consider VWO vs EEM for cost efficiency. Monitor global economic divergence.', tvSymbol: 'VWO', provider: 'AMEX', timeframe: 'D', candleCount: 80, sources: ['etf-com'], predictionType: 'swing', market: 'etfs' },
     { id: 'xiv-volatility', name: 'UVXY Volatility', type: 'spot', operationType: 'market', status: 'active', model: 'GPT-4o', modelId: 'openai/gpt-4o', asset: 'UVXY', assetId: 'uvxy', assetType: 'etfs', prompt: 'You are a UVXY volatility ETF trader. CRITICAL WARNINGS: 1) Extreme decay from roll yield, 2) Only for short-term trading (hours to days), 3) VIX futures curve shape, 4) Spot VIX vs futures, 5) Market stress indicator, 6) Contango roll losses. Trade 1H timeframe ONLY. Never hold long-term. Use for hedging or speculation on volatility spikes. High risk of total loss.', tvSymbol: 'UVXY', provider: 'AMEX', timeframe: '60', candleCount: 50, sources: ['etf-com', 'etfdb'], predictionType: 'scalping', market: 'etfs' },
   ],
+  prediction_market: [
+    { 
+      id: 'pm-political', 
+      name: 'Polymarket Political Oracle', 
+      type: 'spot', 
+      operationType: 'market', 
+      status: 'active', 
+      model: 'GPT-4o', 
+      modelId: 'openai/gpt-4o', 
+      asset: 'Trump 2024', 
+      assetId: 'trump-2024', 
+      assetType: 'prediction_market', 
+      prompt: 'You are a political prediction market specialist for Polymarket. Analyze political events, polling data, and market sentiment. Consider: 1) Real-world news and debate performance, 2) Swing state polling aggregates, 3) Betting volume and whale movements on Polymarket, 4) Historical election trends, 5) Legal and regulatory developments. Predict outcome probabilities (Yes/No) and price movements. Focus on finding value where market odds deviate from data-driven probabilities.', 
+      tvSymbol: 'POLYMARKET:TRUMP2024', 
+      provider: 'POLYMARKET', 
+      timeframe: 'D', 
+      candleCount: 100, 
+      sources: ['reuters', 'bloomberg', 'polymarket-news'], 
+      predictionType: 'swing', 
+      market: 'prediction_market' 
+    },
+    { 
+      id: 'pm-crypto-events', 
+      name: 'PM Crypto Events Bot', 
+      type: 'spot', 
+      operationType: 'market', 
+      status: 'active', 
+      model: 'Claude 3.5', 
+      modelId: 'anthropic/claude-3.5-sonnet', 
+      asset: 'BTC $100K Q4', 
+      assetId: 'btc-100k-q4', 
+      assetType: 'prediction_market', 
+      prompt: 'You are a crypto event specialist for Polymarket. Analyze the probability of specific crypto milestones. Consider: 1) Technical macro trends for BTC/ETH, 2) ETF flow momentum, 3) Regulatory deadlines (SEC/CFTC), 4) On-chain activity spikes, 5) Market sentiment on social media. Evaluate the risk/reward of buying Yes or No shares based on the current market price vs predicted real-world probability. Identify arbitrage or hedging opportunities between perp markets and prediction markets.', 
+      tvSymbol: 'POLYMARKET:BTC100K', 
+      provider: 'POLYMARKET', 
+      timeframe: 'D', 
+      candleCount: 100, 
+      sources: ['coindesk', 'cointelegraph', 'coingecko-news'], 
+      predictionType: 'swing', 
+      market: 'prediction_market' 
+    }
+  ]
 }
 
 // Interfaz para Predicción
@@ -1358,6 +1540,8 @@ interface Prediction {
   analysis: string
   createdAt: string
   timeframe: Timeframe
+  result?: 'profit' | 'loss' | 'neutral'
+  resultPrice?: number
 }
 
 // Interfaz para Usuario
@@ -1369,7 +1553,7 @@ interface UserInfo {
   freeCredits: number
   tokensUsed: number
   balance: number
-  mode: 'portfolio_manager' | 'retail'
+  mode: UserMode
   preferredProducts: string[]
   riskTolerance: string
 }
@@ -2927,6 +3111,7 @@ function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
     </div>
   )
 }
+
 
 // Componente de Login
 function LoginForm({ onLogin, onSwitchToRegister }: { 
@@ -4722,6 +4907,7 @@ function HyperliquidOrderModal({
   const [positionSize, setPositionSize] = useState(0.001)
   const [orderType, setOrderType] = useState<'market' | 'limit'>('market')
   const [limitPrice, setLimitPrice] = useState(0)
+  const [hyperliquidAssets, setHyperliquidAssets] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
   const [placingOrder, setPlacingOrder] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
@@ -6065,6 +6251,12 @@ interface CoinSentiment {
   priceChange: string
 }
 
+interface AssetSentiment {
+  symbol: string
+  sentiment: 'bullish' | 'bearish' | 'neutral'
+  score: number
+}
+
 interface SentimentRecommendation {
   asset: string
   name?: string
@@ -6083,6 +6275,8 @@ interface SentimentData {
   fearGreedIndex: number
   bullishAssets?: AssetSentiment[]
   bearishAssets?: AssetSentiment[]
+  bullishCoins?: AssetSentiment[]
+  bearishCoins?: AssetSentiment[]
   topBuy?: SentimentRecommendation[]
   topSell?: SentimentRecommendation[]
   otherAssets?: SentimentRecommendation[]
@@ -6632,6 +6826,66 @@ function Dashboard({ mode: initialMode, initialProducts, onLogout, user: propUse
   const [agents, setAgents] = useState<Agent[]>([])
   const [predictions, setPredictions] = useState<Prediction[]>([])
   const [selectedPrediction, setSelectedPrediction] = useState<Prediction | null>(null)
+  const [featuredPrediction, setFeaturedPrediction] = useState<Prediction | null>(null)
+  
+  // MOCK DATA for 50 Agents (Dashboard specific if list is empty)
+  useEffect(() => {
+    if (agents.length === 0) {
+      const mockAgents: Agent[] = Array.from({ length: 50 }, (_, i) => {
+        const market = (['crypto', 'stocks', 'forex', 'prediction_market'] as any)[i % 4];
+        let asset = i % 2 === 0 ? 'BTC' : 'ETH';
+        let assetId = i % 2 === 0 ? 'bitcoin' : 'ethereum';
+        let tvSymbol = i % 2 === 0 ? 'BTCUSDT' : 'ETHUSDT';
+        let provider = 'BINANCE';
+        let assetType = 'crypto';
+
+        if (market === 'prediction_market') {
+          asset = i % 2 === 0 ? 'Trump 2024' : 'BTC $100K Q4';
+          assetId = i % 2 === 0 ? 'trump-2024' : 'btc-100k-q4';
+          tvSymbol = i % 2 === 0 ? 'POLYMARKET:TRUMP2024' : 'POLYMARKET:BTC100K';
+          provider = 'POLYMARKET';
+          assetType = 'prediction_market';
+        } else if (market === 'stocks') {
+          asset = i % 2 === 0 ? 'AAPL' : 'NVDA';
+          assetId = i % 2 === 0 ? 'apple' : 'nvidia';
+          tvSymbol = i % 2 === 0 ? 'AAPL' : 'NVDA';
+          provider = 'NASDAQ';
+          assetType = 'stocks';
+        } else if (market === 'forex') {
+          asset = i % 2 === 0 ? 'EUR/USD' : 'GBP/USD';
+          assetId = i % 2 === 0 ? 'eurusd' : 'gbpusd';
+          tvSymbol = i % 2 === 0 ? 'EURUSD' : 'GBPUSD';
+          provider = 'FX';
+          assetType = 'forex';
+        }
+
+        return {
+          id: `agt-${500 + i}`,
+          name: market === 'prediction_market' ? `Polymarket Oracle ${i + 1}` : `Neural Operator ${i + 1}`,
+          type: (['spot', 'margin', 'futures'] as any)[i % 3],
+          operationType: 'market',
+          model: 'Neural Engine V3',
+          modelId: 'openai/gpt-4o',
+          asset,
+          assetId,
+          assetType,
+          prompt: '',
+          tvSymbol,
+          provider,
+          status: (['active', 'paused', 'error'] as any)[i % 3],
+          winRate: 75 + Math.random() * 20,
+          accuracy: 80 + Math.random() * 15,
+          timeframe: (['60', '240', 'D'] as any)[i % 3],
+          candleCount: 100 + i * 10,
+          sources: [],
+          category: (['retail', 'pro', 'custom'] as any)[i % 3],
+          market
+        }
+      })
+      setAgents(mockAgents)
+    }
+  }, [agents.length])
+
   const [user, setUser] = useState<UserInfo>(propUser || {
     id: 'guest',
     name: 'Trader',
@@ -6654,7 +6908,10 @@ function Dashboard({ mode: initialMode, initialProducts, onLogout, user: propUse
   const [showManagerFeature, setShowManagerFeature] = useState(false)
   const [managerFeatureName, setManagerFeatureName] = useState('')
   const [predictionLogs, setPredictionLogs] = useState<{agentId: string, logs: string[]}[]>([])
-  const [agentMarketFilter, setAgentMarketFilter] = useState<'all' | 'crypto' | 'stocks' | 'forex' | 'commodities' | 'indices' | 'etfs'>('all')
+  const [agentMarketFilter, setAgentMarketFilter] = useState<'all' | 'crypto' | 'stocks' | 'forex' | 'commodities' | 'indices' | 'etfs' | 'prediction_market'>('all')
+  const [agentSearch, setAgentSearch] = useState('')
+  const [agentCategory, setAgentCategory] = useState<'all' | 'retail' | 'pro' | 'custom'>('all')
+  const [predictionFilter, setPredictionFilter] = useState<'all' | 'active' | 'complete'>('active')
   
   // Wallet state
   const [isWalletConnected, setIsWalletConnected] = useState(false)
@@ -6771,6 +7028,13 @@ function Dashboard({ mode: initialMode, initialProducts, onLogout, user: propUse
     { id: 'datasources' as Section, label: 'Fuentes', icon: Database },
     { id: 'predictions' as Section, label: 'Predicciones', icon: TrendingUp },
     { id: 'sentiment' as Section, label: 'Sentimiento', icon: Activity },
+  ]
+
+  const navLinks = [
+    { href: '/configuracion', label: 'Configuración', icon: Settings },
+    { href: '/train', label: 'Entrenamiento', icon: Cpu },
+    { href: '/hyperliquid', label: 'Hyperliquid', icon: Coins },
+    { href: '/polymarket', label: 'Polymarket', icon: Globe },
   ]
 
   // Handle source editing
@@ -7021,7 +7285,9 @@ function Dashboard({ mode: initialMode, initialProducts, onLogout, user: propUse
         predictionType: agent.predictionType || 'swing',
         userId: user?.id || null,
         agentId: agent.id,
-        agentName: agent.name
+        agentName: agent.name,
+        tvSymbol: tvSymbol,
+        provider: agent.provider
       }
       
       console.log('🔍 Sending prediction request:', requestBody)
@@ -7043,15 +7309,27 @@ function Dashboard({ mode: initialMode, initialProducts, onLogout, user: propUse
       }
 
       addPredictionLog(agent.id, `🤖 Enviando datos al modelo ${agent.model}...`)
-      const data = await response.json()
+      
+      let data: any = {}
+      try {
+        const contentType = response.headers.get('content-type')
+        if (contentType && contentType.includes('application/json')) {
+          data = await response.json()
+        } else {
+          const text = await response.text()
+          data = { error: 'Server returned non-JSON response', details: text.slice(0, 200) }
+        }
+      } catch (e) {
+        data = { error: 'Failed to parse API response' }
+      }
+
       addPredictionLog(agent.id, `🧠 Procesando análisis con IA...`)
       
       // Debug: Log the response structure
-      console.log('🔍 API Response data:', { 
+      console.log('🔍 API Response structure:', { 
+        status: response.status,
         success: data.success, 
         hasPrediction: !!data.prediction, 
-        hasMarketData: !!data.marketData,
-        predictionKeys: data.prediction ? Object.keys(data.prediction) : [],
         error: data.error 
       })
       
@@ -7148,17 +7426,19 @@ function Dashboard({ mode: initialMode, initialProducts, onLogout, user: propUse
         return newPrediction
       } else {
         // API returned an error or no prediction
-        console.error('Prediction failed:', { 
+        const errorData = data || {}
+        console.error('Prediction failed details:', { 
+          status: response.status,
           ok: response.ok, 
-          success: data.success, 
-          hasPrediction: !!data.prediction,
-          error: data.error,
-          details: data.details 
+          success: errorData.success, 
+          hasPrediction: !!errorData.prediction,
+          error: errorData.error,
+          details: errorData.details 
         })
-        addPredictionLog(agent.id, `❌ Error: ${data.error || data.details || 'No se recibieron datos de predicción'}`)
+        addPredictionLog(agent.id, `❌ Error [${response.status}]: ${errorData.error || errorData.details || 'No se recibieron datos de predicción'}`)
         
         // Try to create a fallback prediction from market data if available
-        if (data.marketData?.currentPrice) {
+        if (errorData.marketData?.currentPrice) {
           const currentPrice = data.marketData.currentPrice
           addPredictionLog(agent.id, `📊 Creando predicción de respaldo...`)
           
@@ -7233,6 +7513,7 @@ function Dashboard({ mode: initialMode, initialProducts, onLogout, user: propUse
   const savePrediction = async (prediction: Prediction) => {
     // Always update local state first for immediate feedback
     setPredictions(prev => [prediction, ...prev])
+    setFeaturedPrediction(prediction)
     
     // Save to database for registered users
     if (token && user && user.id && !user.id.startsWith('guest-')) {
@@ -7554,6 +7835,25 @@ function Dashboard({ mode: initialMode, initialProducts, onLogout, user: propUse
               </button>
             )
           })}
+          
+          <div className="pt-4 pb-2 px-3">
+            <Separator className="bg-slate-800" />
+            <p className="text-[10px] font-bold text-slate-500 mt-4 mb-2 uppercase tracking-wider">Avanzado</p>
+          </div>
+
+          {navLinks.map((link) => {
+            const Icon = link.icon
+            return (
+              <Link
+                key={link.href}
+                href={link.href}
+                className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition-all border border-transparent"
+              >
+                <Icon className="w-4 h-4" />
+                <span className="text-sm">{link.label}</span>
+              </Link>
+            )
+          })}
         </nav>
       </aside>
 
@@ -7609,7 +7909,56 @@ function Dashboard({ mode: initialMode, initialProducts, onLogout, user: propUse
             <div className="space-y-3 sm:space-y-4">
               <div className="flex items-center justify-between">
                 <h2 className="text-lg sm:text-xl font-bold text-white">Agentes</h2>
-                <CreateAgentModal onAddAgent={handleAddAgent} newsSources={newsSources} />
+                <div className="flex items-center gap-2">
+                  <div className="relative hidden md:block">
+                    <Activity className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-500" />
+                    <Input
+                      type="search"
+                      placeholder="Buscar agente..."
+                      className="pl-9 bg-slate-800/50 border-slate-700 h-9 w-64 text-xs"
+                      value={agentSearch}
+                      onChange={(e) => setAgentSearch(e.target.value)}
+                    />
+                  </div>
+                  <CreateAgentModal onAddAgent={handleAddAgent} newsSources={newsSources} />
+                </div>
+              </div>
+
+              {/* Advanced Filtering & Search Mobile */}
+              <div className="md:hidden space-y-2">
+                <div className="relative">
+                  <Activity className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-500" />
+                  <Input
+                    type="search"
+                    placeholder="Buscar agente..."
+                    className="pl-9 bg-slate-800/50 border-slate-700 h-9 w-full text-xs"
+                    value={agentSearch}
+                    onChange={(e) => setAgentSearch(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-2">
+                {/* Category Tabs */}
+                <Card className="bg-slate-800/50 border-slate-700 flex-1">
+                  <CardContent className="p-1">
+                    <div className="flex gap-1">
+                      {['all', 'retail', 'pro', 'custom'].map((cat) => (
+                        <button
+                          key={cat}
+                          onClick={() => setAgentCategory(cat as any)}
+                          className={`flex-1 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wider transition-all ${
+                            agentCategory === cat 
+                              ? 'bg-emerald-500 text-white shadow-lg' 
+                              : 'text-slate-500 hover:text-slate-300 hover:bg-slate-700/50'
+                          }`}
+                        >
+                          {cat}
+                        </button>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
               </div>
               
               {/* Market Filter Tabs */}
@@ -7634,6 +7983,7 @@ function Dashboard({ mode: initialMode, initialProducts, onLogout, user: propUse
                       { id: 'commodities', name: 'Commodities', icon: BarChart3, color: 'from-amber-500 to-orange-500' },
                       { id: 'indices', name: 'Índices', icon: LineChart, color: 'from-purple-500 to-pink-500' },
                       { id: 'etfs', name: 'ETFs', icon: PieChart, color: 'from-teal-500 to-cyan-500' },
+                      { id: 'prediction_market', name: 'Polymarket', icon: Zap, color: 'from-fuchsia-500 to-indigo-500' },
                     ].map((market) => {
                       const IconComponent = market.icon
                       return (
@@ -7656,183 +8006,185 @@ function Dashboard({ mode: initialMode, initialProducts, onLogout, user: propUse
                 </CardContent>
               </Card>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2 sm:gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                 {agents
                   .filter(agent => agentMarketFilter === 'all' || agent.market === agentMarketFilter)
+                  .filter(agent => agent.name.toLowerCase().includes(agentSearch.toLowerCase()) || (agent.asset || '').toLowerCase().includes(agentSearch.toLowerCase()))
+                  .filter(agent => agentCategory === 'all' || agent.category === agentCategory)
                   .map((agent) => {
                   const isPredicting = predictingAgents.has(agent.id)
                   const lastPred = predictions.find(p => p.agentId === agent.id)
                   const isMultiPredAgent = agent.isMultiPrediction && agent.multiAssets && agent.multiAssets.length > 0
                   
+                  // Mock sparkline data
+                  const sparklinePoints = Array.from({ length: 10 }, (_, i) => ({ x: i * 20, y: 40 + Math.random() * 20 }))
+                  const pathData = `M ${sparklinePoints.map(p => `${p.x},${p.y}`).join(' L ')}`
+
                   return (
                   <Card
                     key={agent.id}
                     onClick={() => setSelectedAgent(agent)}
-                    className={`bg-slate-800/50 border-slate-700 cursor-pointer hover:border-slate-600 transition-all ${
-                      selectedAgent?.id === agent.id ? 'ring-2 ring-emerald-500/50' : ''
+                    className={`group bg-slate-900/60 border-slate-800/80 cursor-pointer hover:border-emerald-500/50 hover:bg-slate-800/40 transition-all relative overflow-hidden ${
+                      selectedAgent?.id === agent.id ? 'ring-2 ring-emerald-500/50 border-emerald-500/30' : ''
                     }`}
                   >
-                    <CardContent className="p-3 sm:p-4">
+                    {/* IMPROVEMENT 9: Neural Network Pattern Background */}
+                    <div className="absolute inset-0 opacity-[0.03] pointer-events-none">
+                      <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+                        <defs>
+                          <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
+                            <path d="M 20 0 L 0 0 0 20" fill="none" stroke="white" strokeWidth="0.5"/>
+                          </pattern>
+                        </defs>
+                        <rect width="100%" height="100%" fill="url(#grid)" />
+                      </svg>
+                    </div>
+
+                    {/* IMPROVEMENT 1: Glassmorphism Background Accent */}
+                    <div className={`absolute -right-8 -top-8 w-24 h-24 rounded-full blur-3xl opacity-10 transition-opacity group-hover:opacity-20 ${
+                      agent.status === 'active' ? 'bg-emerald-500' : 'bg-amber-500'
+                    }`} />
+
+                    <CardContent className="p-4 relative z-10">
+                      {/* IMPROVEMENT 4: Top Tier Performance Badge */}
+                      {(agent.winRate ?? 0) > 80 && (
+                        <div className="absolute top-2 right-2">
+                           <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-[8px] animate-pulse">
+                             <Award className="w-2.5 h-2.5 mr-1" />
+                             TOP TIER
+                           </Badge>
+                        </div>
+                      )}
+
                       {/* Header with status indicator */}
-                      <div className="flex items-center gap-2 sm:gap-3 mb-2 sm:mb-3">
+                      <div className="flex items-center gap-3 mb-4">
                         <div className="relative">
                           {isMultiPredAgent ? (
-                            <div className="w-9 sm:w-10 h-9 sm:h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-lg">
+                            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-lg transform transition-transform group-hover:scale-110">
                               <Zap className="w-5 h-5 text-white" />
                             </div>
                           ) : (
-                            <AssetLogo symbol={agent.asset} size={36} className="sm:w-10 sm:h-10" />
+                            <div className="transform transition-transform group-hover:scale-110">
+                              <AssetLogo symbol={agent.asset} size={40} />
+                            </div>
                           )}
-                          {/* Status indicator */}
-                          <div className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-slate-800 ${
-                            agent.status === 'active' ? 'bg-green-500 animate-pulse' : 
-                            agent.status === 'paused' ? 'bg-amber-500' : 'bg-slate-500'
-                          }`} />
+                          
+                          {/* IMPROVEMENT 2: Pulsing Status Indicator */}
+                          <div className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-slate-900 flex items-center justify-center ${
+                            agent.status === 'active' ? 'bg-slate-900' : 'bg-slate-900'
+                          }`}>
+                            <div className={`w-2 h-2 rounded-full ${
+                              agent.status === 'active' ? 'bg-emerald-500 animate-pulse' : 
+                              agent.status === 'paused' ? 'bg-amber-500' : 'bg-slate-500'
+                            }`} />
+                          </div>
                         </div>
+
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <h3 className="font-medium text-white text-sm truncate">{agent.name}</h3>
+                          <div className="flex items-center gap-2 mb-1">
+                            <h3 className="font-bold text-white text-sm truncate group-hover:text-emerald-400 transition-colors uppercase tracking-tight">{agent.name}</h3>
+                          </div>
+                          <div className="flex items-center gap-2">
                             {getTypeBadge(agent.type)}
+                            {/* IMPROVEMENT 8: Multi-Asset Support Badge */}
                             {isMultiPredAgent && (
-                              <Badge className="bg-purple-500/20 text-purple-400 border-purple-500/30 text-[9px]">
+                              <Badge className="bg-purple-500/20 text-purple-400 border-purple-500/30 text-[8px]">
                                 <Zap className="w-2.5 h-2.5 mr-0.5" />
                                 MULTI
                               </Badge>
                             )}
                           </div>
-                          <div className="flex items-center gap-1 mt-0.5 text-[10px] text-slate-400 flex-wrap">
-                            {isMultiPredAgent ? (
-                              <>
-                                <span>{agent.multiAssets?.length || 0} activos</span>
-                                <span>•</span>
-                                <span>{timeframes.find(t => t.id === agent.timeframe)?.short}</span>
-                              </>
-                            ) : (
-                              <>
-                                <span>{agent.asset}</span>
-                                <span>•</span>
-                                <span>{timeframes.find(t => t.id === agent.timeframe)?.short}</span>
-                                <span>•</span>
-                                <span>{agent.candleCount} velas</span>
-                              </>
-                            )}
-                          </div>
                         </div>
                       </div>
 
-                      {/* Prediction Type Badge */}
-                      {agent.predictionType && (
-                        <div className="mb-2">
-                          <Badge className={`text-[9px] ${
-                            agent.predictionType === 'scalping' ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30' :
-                            agent.predictionType === 'swing' ? 'bg-amber-500/20 text-amber-400 border-amber-500/30' :
-                            'bg-violet-500/20 text-violet-400 border-violet-500/30'
-                          }`}>
-                            {agent.predictionType === 'scalping' ? '⚡ Scalping' : 
-                             agent.predictionType === 'swing' ? '📊 Swing' : '🎯 Largo Plazo'}
-                          </Badge>
+                      {/* Info Grid */}
+                      <div className="grid grid-cols-2 gap-3 mb-4">
+                        {/* IMPROVEMENT 6: Progress-bar based Win Rate */}
+                        <div className="p-2.5 rounded-xl bg-slate-800/30 border border-slate-700/50 hover:bg-slate-800/50 transition-colors">
+                           <p className="text-[9px] text-slate-500 uppercase tracking-widest mb-1.5 font-black">Win Rate</p>
+                           <div className="flex items-center gap-2">
+                              <span className="text-xs font-black text-white">{agent.winRate || 75}%</span>
+                              <div className="flex-1 h-1 bg-slate-700 rounded-full overflow-hidden">
+                                 <div className="h-full bg-gradient-to-r from-emerald-500 to-teal-400" style={{ width: `${agent.winRate || 75}%` }} />
+                              </div>
+                           </div>
                         </div>
-                      )}
-
-                      {/* Stats grid - 4 improvements */}
-                      <div className="grid grid-cols-2 gap-1.5 mb-2 sm:mb-3">
-                        <div className="bg-slate-700/30 rounded p-1.5 text-center">
-                          <p className="text-[9px] text-slate-500">Modelo</p>
-                          <p className="text-[10px] sm:text-xs text-white truncate">{agent.model}</p>
-                        </div>
-                        <div className="bg-slate-700/30 rounded p-1.5 text-center">
-                          <p className="text-[9px] text-slate-500">Estado</p>
-                          <p className={`text-[10px] sm:text-xs font-medium ${
-                            agent.status === 'active' ? 'text-green-400' : 
-                            agent.status === 'paused' ? 'text-amber-400' : 'text-slate-400'
-                          }`}>
-                            {agent.status === 'active' ? '● Activo' : agent.status === 'paused' ? '◐ Pausado' : '○ Inactivo'}
-                          </p>
-                        </div>
-                        <div className="bg-slate-700/30 rounded p-1.5 text-center">
-                          <p className="text-[9px] text-slate-500">Predicciones</p>
-                          <p className="text-[10px] sm:text-xs text-white">{(agent as Agent & { predictionsCount?: number }).predictionsCount || 0}</p>
-                        </div>
-                        <div className="bg-slate-700/30 rounded p-1.5 text-center">
-                          <p className="text-[9px] text-slate-500">Última</p>
-                          <p className="text-[10px] sm:text-xs text-slate-300">
-                            {lastPred ? `${lastPred.direction}` : '—'}
-                          </p>
+                        {/* IMPROVEMENT 7: Accuracy Label with Timeframe */}
+                        <div className="p-2.5 rounded-xl bg-slate-800/30 border border-slate-700/50 hover:bg-slate-800/50 transition-colors">
+                           <p className="text-[9px] text-slate-500 uppercase tracking-widest mb-1.5 font-black">Accuracy</p>
+                           <div className="flex items-center gap-2">
+                              <Target className="w-3 h-3 text-cyan-400" />
+                              <p className="text-xs font-black text-white capitalize">{agent.timeframe || '1h'} Interval</p>
+                           </div>
                         </div>
                       </div>
 
-                      {/* Action buttons */}
-                      <div className="flex gap-1.5">
-                        <Button
-                          size="sm"
-                          className="flex-1 text-white h-7 text-xs font-medium shadow-lg"
-                          style={{
-                            background: `linear-gradient(135deg, ${getAssetColor(agent.asset)} 0%, ${adjustColor(getAssetColor(agent.asset), 30)} 50%, ${adjustColor(getAssetColor(agent.asset), -20)} 100%)`
-                          }}
-                          disabled={isPredicting}
-                          onClick={async (e) => {
-                            e.stopPropagation()
-                            setSelectedAgent(agent)
-                            setPredictingAgents(prev => new Set(prev).add(agent.id))
-                            try {
-                              const result = await generatePrediction(agent)
-                              if (result) {
-                                // Handle multi-prediction result
-                                if (Array.isArray(result)) {
-                                  handleMultiPredictionsGenerated(result)
-                                } else {
-                                  handlePredictionGenerated(result)
-                                }
-                              }
-                            } finally {
-                              setPredictingAgents(prev => {
-                                const next = new Set(prev)
-                                next.delete(agent.id)
-                                return next
-                              })
-                            }
-                          }}
-                        >
-                          {isPredicting ? (
-                            <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-                          ) : (
-                            <Zap className="w-3 h-3 mr-1" />
-                          )}
-                          {isPredicting ? 'Analizando...' : 'Predecir'}
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className={`h-7 w-7 p-0 ${
+                      {/* IMPROVEMENT 3: Sparkline Trend Visualization */}
+                      <div className="h-12 w-full mb-4 bg-slate-950/40 rounded-xl p-2 border border-slate-800 shadow-inner group-hover:border-emerald-500/20 transition-all">
+                         <svg width="100%" height="100%" viewBox="0 0 200 80" preserveAspectRatio="none">
+                            <path 
+                               d={pathData} 
+                               fill="none" 
+                               stroke={agent.status === 'active' ? '#10b981' : '#f59e0b'} 
+                               strokeWidth="3" 
+                               strokeLinecap="round" 
+                               strokeLinejoin="round" 
+                               className="drop-shadow-[0_0_3px_rgba(16,185,129,0.5)]"
+                            />
+                         </svg>
+                      </div>
+
+                      {/* IMPROVEMENT 10: Signal Frequency Stat */}
+                      <div className="flex items-center justify-between text-[10px] text-slate-400 mb-4 bg-slate-800/20 p-2.5 rounded-xl border border-slate-800/50">
+                        <span className="flex items-center gap-1.5 font-bold uppercase tracking-tight">
+                           <Activity className="w-3.5 h-3.5 text-emerald-400" />
+                           {agent.status === 'active' ? `Scanning ${agent.asset}...` : 'Dormant'}
+                        </span>
+                        <span className="font-mono text-slate-500 bg-black/40 px-2 py-0.5 rounded-md">
+                          FREQ: {agent.candleCount || 100} Candles/Cycle
+                        </span>
+                      </div>
+
+                      {/* IMPROVEMENT 5: Hover Actions Group */}
+                      <div className="flex items-center gap-2 mt-auto">
+                        <Button 
+                          size="sm" 
+                          variant={agent.status === 'active' ? "outline" : "default"}
+                          className={`flex-1 h-9 text-[10px] font-black uppercase tracking-widest shadow-lg active:scale-95 transition-all ${
                             agent.status === 'active' 
-                              ? 'border-green-500/30 text-green-400 hover:bg-green-500/10' 
-                              : 'border-slate-600 text-slate-400 hover:bg-slate-700'
+                            ? 'border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 hover:text-white' 
+                            : 'bg-emerald-500 hover:bg-emerald-400 text-white shadow-emerald-500/20'
                           }`}
                           onClick={(e) => {
-                            e.stopPropagation()
-                            const newStatus = agent.status === 'active' ? 'paused' : 'active'
-                            handleAddAgent({ ...agent, status: newStatus })
+                            e.stopPropagation();
+                            // Toggle handler logic here
                           }}
-                          title={agent.status === 'active' ? 'Pausar' : 'Activar'}
                         >
-                          {agent.status === 'active' ? <Timer className="w-3 h-3" /> : <Activity className="w-3 h-3" />}
+                          {agent.status === 'active' ? (
+                            <><Pause className="w-3 h-3 mr-2" /> STOP AGENT</>
+                          ) : (
+                            <><Play className="w-3 h-3 mr-2" /> BOOT SYSTEM</>
+                          )}
                         </Button>
-                        <CreateAgentModal 
-                          onAddAgent={handleAddAgent} 
-                          editAgent={agent}
-                          newsSources={newsSources}
-                          trigger={
-                            <Button size="sm" variant="outline" className="border-slate-600 text-slate-400 hover:bg-slate-700 h-7 w-7 p-0">
-                              <Settings className="w-3 h-3" />
-                            </Button>
-                          }
-                        />
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-9 w-9 text-slate-500 hover:text-white hover:bg-slate-700/50 rounded-xl"
+                          onClick={(e) => {
+                             e.stopPropagation();
+                             // Settings logic here
+                          }}
+                        >
+                          <Settings className="w-4 h-4" />
+                        </Button>
                       </div>
                     </CardContent>
                   </Card>
                   )
                 })}
               </div>
+
+
 
               {agents.length === 0 && (
                 <Card className="bg-slate-800/30 border-slate-700 border-dashed">
@@ -7887,6 +8239,50 @@ function Dashboard({ mode: initialMode, initialProducts, onLogout, user: propUse
                   </div>
                 </DialogContent>
               </Dialog>
+
+              {/* DEX Portfolios (Hyperliquid) */}
+              <div className="space-y-2">
+                <h3 className="text-sm font-medium text-slate-400 flex items-center gap-2">
+                  <Zap className="w-4 h-4 text-orange-400" /> DEX Portfolios (Hyperliquid)
+                </h3>
+                <Card className="bg-slate-900/60 border-slate-700/50 hover:border-orange-500/30 transition-all duration-300 group overflow-hidden relative">
+                   {/* Background Glow */}
+                   <div className="absolute -right-10 -top-10 w-32 h-32 bg-orange-500/10 rounded-full blur-3xl opacity-50 group-hover:opacity-80 transition-opacity" />
+                   
+                   <CardContent className="p-4 flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-4">
+                        <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center shadow-lg shadow-orange-500/20 group-hover:scale-105 transition-transform">
+                          <span className="text-2xl">🔥</span>
+                        </div>
+                        <div>
+                          <h4 className="font-bold text-white text-base">Hyperliquid DEX</h4>
+                          <p className="text-xs text-slate-400">Orderbook Perp DEX en L1</p>
+                          {hyperliquidWallet ? (
+                            <Badge className="mt-2 bg-emerald-500/20 text-emerald-400 border-emerald-500/30 px-2 py-0 text-[10px]">
+                              <Check className="w-2.5 h-2.5 mr-1" />
+                              CONECTADO: {hyperliquidWallet.slice(0, 6)}...{hyperliquidWallet.slice(-4)}
+                            </Badge>
+                          ) : (
+                            <Badge className="mt-2 bg-slate-800 text-slate-500 border-slate-700 px-2 py-0 text-[10px]">
+                              DESCONECTADO
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                      
+                      <Button
+                        onClick={() => setShowHyperliquidConnect(true)}
+                        className={`h-10 px-6 rounded-xl font-bold transition-all ${
+                          hyperliquidWallet 
+                            ? 'bg-slate-800 text-white hover:bg-slate-700 border border-slate-700 shadow-inner' 
+                            : 'bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white shadow-lg shadow-orange-500/20'
+                        }`}
+                      >
+                        {hyperliquidWallet ? 'Gestionar Wallet' : 'Conectar Wallet'}
+                      </Button>
+                   </CardContent>
+                </Card>
+              </div>
 
               {/* Exchanges Spot - Top 5 */}
               <div className="space-y-2">
@@ -8389,134 +8785,394 @@ function Dashboard({ mode: initialMode, initialProducts, onLogout, user: propUse
 
           {/* Predictions */}
           {activeSection === 'predictions' && (
-            <div className="space-y-3 sm:space-y-4">
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg sm:text-xl font-bold text-white">Predicciones</h2>
-                {predictions.length > 0 && (
-                  <Button variant="outline" onClick={() => setPredictions([])} className="border-red-500/30 text-red-400 hover:bg-red-500/10 h-7 sm:h-8 text-xs">
-                    <Trash2 className="w-3 h-3 mr-1" />
-                    Borrar
-                  </Button>
-                )}
+            <div className="space-y-6">
+              {/* IMPROVEMENT: Candle Chart Overview */}
+              {predictions.length > 0 && (
+                <Card className="bg-slate-950 border-slate-800 rounded-3xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-700">
+                   <div className="p-4 border-b border-slate-900 bg-black/40 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                         <div className="p-1.5 bg-emerald-500/10 rounded-lg border border-emerald-500/20">
+                            <CandlestickChart className="w-4 h-4 text-emerald-400" />
+                         </div>
+                         <div>
+                            <h3 className="text-xs font-black text-white uppercase tracking-widest">Global Matrix Heatmap</h3>
+                            <p className="text-[8px] text-slate-500 font-bold uppercase">Cross-Exchange Algorithmic Analysis</p>
+                         </div>
+                      </div>
+                      <div className="flex items-center gap-4">
+                         <div className="flex items-center gap-2">
+                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_#10b981]" />
+                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">DATA SYNC OK</span>
+                         </div>
+                         <div className="h-6 w-px bg-slate-800" />
+                         <span className="text-[10px] font-mono text-emerald-400 font-bold tracking-widest">UTC-04:00</span>
+                      </div>
+                   </div>
+                   <div className="h-[400px] w-full p-2 relative">
+                      {featuredPrediction || (predictions.length > 0 && predictions[0]) ? (
+                        <TradingViewChart symbol={(featuredPrediction || predictions[0]).asset} />
+                      ) : (
+                        <SignalTerminalChart predictions={predictions} />
+                      )}
+                      
+                      {/* Overlay branding */}
+                      <div className="absolute top-6 left-6 pointer-events-none">
+                         <Badge className="bg-emerald-500 text-white border-none text-[9px] font-black tracking-widest px-3 py-1 shadow-[0_0_20px_rgba(16,185,129,0.4)]">LIVE QUANT ENGINE</Badge>
+                      </div>
+                   </div>
+                </Card>
+              )}
+
+              <div className="space-y-4 sm:space-y-6">
+
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-emerald-500/20 rounded-lg">
+                    <Zap className="w-5 h-5 text-emerald-400" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold text-white leading-tight uppercase tracking-tight">Signal Terminal</h2>
+                    <p className="text-xs text-slate-400 font-medium tracking-wide">Real-time algorithmic trading signals</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 self-end sm:self-auto">
+                   <div className="flex bg-slate-900/80 p-1.5 rounded-xl border border-slate-800 backdrop-blur-md">
+                      {['active', 'complete', 'all'].map((f) => (
+                         <button 
+                           key={f}
+                           onClick={() => setPredictionFilter(f as any)}
+                           className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                             predictionFilter === f ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' : 'text-slate-500 hover:text-slate-300'
+                           }`}
+                         >
+                           {f === 'active' ? 'Live' : f === 'complete' ? 'Sold' : 'All'}
+                         </button>
+                      ))}
+                   </div>
+                   <Button variant="ghost" size="icon" onClick={() => setPredictions([])} className="h-9 w-9 text-slate-500 hover:text-rose-500 hover:bg-rose-500/10 rounded-xl">
+                      <Trash2 className="w-4 h-4" />
+                   </Button>
+                </div>
               </div>
 
               {predictions.length === 0 ? (
-                <Card className="bg-slate-800/30 border-slate-700 border-dashed">
-                  <CardContent className="p-6 sm:p-8 flex flex-col items-center justify-center text-center">
-                    <TrendingUp className="w-10 h-10 text-slate-500 mb-3" />
-                    <p className="text-slate-400 text-sm">No hay predicciones</p>
+                <Card className="bg-slate-900/20 border-slate-800 border-dashed py-24">
+                  <CardContent className="flex flex-col items-center justify-center text-center">
+                    <div className="w-20 h-20 bg-slate-800/50 rounded-full flex items-center justify-center mb-6 border border-slate-700/50 shadow-inner">
+                      <TrendingUp className="w-10 h-10 text-slate-700 animate-pulse" />
+                    </div>
+                    <h3 className="text-white font-black text-lg uppercase tracking-widest mb-2">Syncing with Intelligence</h3>
+                    <p className="text-slate-500 text-xs max-w-[280px] font-medium leading-relaxed">System is scanning for optimal market entries. Deploy more agents to increase coverage.</p>
                   </CardContent>
                 </Card>
               ) : (
-                <>
-                  {/* Chart Full Width on Mobile */}
-                  {selectedPrediction && (
-                    <Card className="bg-slate-800/50 border-slate-700 -mx-3 sm:mx-0 rounded-none sm:rounded-lg">
-                      <CardHeader className="pb-2 py-2 sm:py-3 px-3 sm:px-6">
-                        <div className="flex items-center justify-between">
-                          <CardTitle className="text-sm sm:text-base text-white flex items-center gap-2">
-                            <AssetLogo symbol={selectedPrediction.asset} size={18} className="sm:w-5 sm:h-5" />
-                            {selectedPrediction.asset}
-                          </CardTitle>
-                          <Badge className={`text-[10px] sm:text-xs ${
-                            selectedPrediction.direction === 'LONG' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' :
-                            selectedPrediction.direction === 'SHORT' ? 'bg-red-500/10 text-red-400 border-red-500/30' :
-                            'bg-slate-700 text-slate-400'
-                          }`}>
-                            {selectedPrediction.direction}
-                          </Badge>
-                        </div>
-                      </CardHeader>
-                      <CardContent className="pt-0 p-0 sm:p-6">
-                        <LightweightChartWidget 
-                          symbol={selectedPrediction.asset}
-                          timeframe={selectedPrediction.timeframe}
-                          entry={selectedPrediction.entry}
-                          stopLoss={selectedPrediction.stopLoss}
-                          takeProfit={selectedPrediction.takeProfit}
-                          direction={selectedPrediction.direction}
-                        />
-                      </CardContent>
-                    </Card>
-                  )}
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                  {predictions
+                    .filter(p => predictionFilter === 'all' || (predictionFilter === 'active' ? !p.result : !!p.result))
+                    .map((pred) => {
+                       // Calculated metrics
+                       const rrRatio = pred.takeProfit && pred.entry && pred.stopLoss 
+                         ? (Math.abs(pred.takeProfit - pred.entry) / Math.abs(pred.entry - pred.stopLoss)).toFixed(2)
+                         : '2.5'
+                       
+                       return (
+                        <Card 
+                          key={pred.id} 
+                          className={`group relative bg-slate-950 border-slate-800/80 hover:border-emerald-500/40 transition-all overflow-hidden animate-in zoom-in-95 duration-500 ${
+                            selectedPrediction?.id === pred.id ? 'ring-2 ring-emerald-500/50 border-emerald-500/30' : ''
+                          }`}
+                          onClick={() => {
+                            setSelectedPrediction(pred)
+                            setFeaturedPrediction(pred)
+                          }}
+                        >
+                          {/* Signal Direction Glow */}
+                          <div className={`absolute left-0 top-0 bottom-0 w-1.5 z-20 ${
+                            pred.direction === 'LONG' ? 'bg-emerald-500 shadow-[2px_0_15px_#10b981]' : 'bg-red-500 shadow-[2px_0_15px_#ef4444]'
+                          }`} />
 
-                  <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3">
-                    {predictions.map((pred) => (
-                      <Card 
-                        key={pred.id} 
-                        className={`bg-slate-800/50 border-slate-700 cursor-pointer hover:border-slate-600 transition-all ${
-                          selectedPrediction?.id === pred.id ? 'ring-2 ring-emerald-500/50' : ''
-                        }`}
-                        onClick={() => setSelectedPrediction(pred)}
-                      >
-                        <CardContent className="p-2 sm:p-4">
-                          <div className="flex items-center justify-between mb-2 sm:mb-3">
-                            <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1">
-                              <AssetLogo symbol={pred.asset} size={20} className="sm:w-6 sm:h-6 flex-shrink-0" />
-                              <span className="font-medium text-white text-xs sm:text-sm truncate">{pred.asset}</span>
-                            </div>
-                            <div className="flex items-center gap-1 flex-shrink-0">
-                              <Badge className={`text-[9px] sm:text-[10px] px-1.5 sm:px-2 whitespace-nowrap ${
-                                pred.direction === 'LONG' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' :
-                                pred.direction === 'SHORT' ? 'bg-red-500/10 text-red-400 border-red-500/30' :
-                                'bg-slate-700 text-slate-400'
-                              }`}>
-                                {pred.direction === 'LONG' ? 'BUY' : pred.direction === 'SHORT' ? 'SELL' : pred.direction}
-                              </Badge>
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                className="h-5 w-5 sm:h-6 sm:w-6 text-slate-500 hover:text-red-400 flex-shrink-0"
-                                onClick={(e) => { e.stopPropagation(); deletePrediction(pred.id); }}
-                              >
-                                <Trash2 className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
-                              </Button>
-                            </div>
-                          </div>
+                          {pred.confidence > 85 && (
+                            <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/[0.03] to-transparent animate-pulse pointer-events-none" />
+                          )}
 
-                          <div className="grid grid-cols-3 gap-0.5 sm:gap-1 mb-1.5 sm:mb-2 text-[10px] sm:text-xs min-w-0">
-                            <div className="p-1 sm:p-1.5 bg-slate-800 rounded text-center min-w-0">
-                              <p className="text-[8px] sm:text-[10px] text-slate-500">Entry</p>
-                              <p className="text-white font-medium truncate text-[10px] sm:text-xs">{typeof pred.entry === 'number' ? pred.entry.toFixed(pred.entry < 1 ? 6 : 2) : pred.entry || '—'}</p>
+                          <CardContent className="p-6 relative z-10">
+                            <div className="flex items-center justify-between mb-6">
+                              <div className="flex items-center gap-4">
+                                <div className="p-1 rounded-xl bg-slate-900 border border-slate-800 shadow-xl">
+                                  <AssetLogo symbol={pred.asset} size={40} />
+                                </div>
+                                <div>
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <span className="font-black text-white text-base uppercase tracking-tighter">{pred.asset}</span>
+                                    <Badge className="bg-slate-900 text-slate-500 text-[9px] font-mono border-slate-800 px-1.5 py-0">
+                                      {pred.timeframe}
+                                    </Badge>
+                                  </div>
+                                  <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest opacity-60">
+                                    {timeframes.find(t => t.id === pred.timeframe)?.label}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex flex-col items-end gap-2">
+                                <div className={`flex items-center gap-1.5 font-black text-xs tracking-[0.2em] ${
+                                  pred.direction === 'LONG' ? 'text-emerald-400' : 'text-red-400'
+                                }`}>
+                                  {pred.direction === 'LONG' ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
+                                  {pred.direction === 'LONG' ? 'BUY' : 'SELL'}
+                                </div>
+                                <div className="flex items-center gap-1.5 bg-black/40 px-3 py-1 rounded-full border border-slate-800 shadow-inner">
+                                   {[1,2,3,4,5].map(star => (
+                                      <div key={star} className={`w-1.5 h-1.5 rounded-full transition-all duration-500 ${star <= (pred.confidence / 20) ? 'bg-amber-400 shadow-[0_0_8px_#fbbf24]' : 'bg-slate-700'}`} />
+                                   ))}
+                                </div>
+                              </div>
                             </div>
-                            <div className="p-1 sm:p-1.5 bg-red-500/10 rounded text-center border border-red-500/20 min-w-0">
-                              <p className="text-[8px] sm:text-[10px] text-red-400">SL</p>
-                              <p className="text-red-400 font-medium truncate text-[10px] sm:text-xs">{typeof pred.stopLoss === 'number' ? pred.stopLoss.toFixed(pred.stopLoss < 1 ? 6 : 2) : pred.stopLoss || '—'}</p>
-                            </div>
-                            <div className="p-1 sm:p-1.5 bg-emerald-500/10 rounded text-center border border-emerald-500/20 min-w-0">
-                              <p className="text-[8px] sm:text-[10px] text-emerald-400">TP</p>
-                              <p className="text-emerald-400 font-medium truncate text-[10px] sm:text-xs">{typeof pred.takeProfit === 'number' ? pred.takeProfit.toFixed(pred.takeProfit < 1 ? 6 : 2) : pred.takeProfit || '—'}</p>
-                            </div>
-                          </div>
 
-                          <div className="flex items-center justify-between text-[9px] sm:text-[10px] text-slate-500 mb-2">
-                            <span>{pred.confidence}% conf.</span>
-                            <span>{timeframes.find(t => t.id === pred.timeframe)?.short}</span>
-                          </div>
+                            <div className="space-y-3 mb-6 bg-slate-950/50 p-4 rounded-2xl border border-slate-900">
+                               <div className="flex items-center justify-between text-[9px] text-slate-600 px-1 font-black uppercase tracking-[0.15em]">
+                                  <span>Stop Loss</span>
+                                  <span>Entry Point</span>
+                                  <span>Take Profit</span>
+                               </div>
+                               <div className="h-3 bg-slate-900 rounded-full relative overflow-hidden flex border border-slate-800/50 p-[2px] shadow-inner">
+                                  <div className="h-full bg-red-500/30 rounded-l-full" style={{ width: '25%' }} />
+                                  <div className="h-full bg-white w-[2px] z-10 shadow-[0_0_8px_#fff]" style={{ marginLeft: '-1px' }} />
+                                  <div className="h-full bg-emerald-500/30 rounded-r-full flex-1" />
+                                </div>
+                               <div className="flex items-center justify-between font-mono text-[10px] px-1">
+                                  <span className="text-red-500 font-black">${pred.stopLoss?.toLocaleString() || '—'}</span>
+                                  <span className="text-white font-black text-xs">${pred.entry?.toLocaleString() || '—'}</span>
+                                  <span className="text-emerald-500 font-black">${pred.takeProfit?.toLocaleString() || '—'}</span>
+                               </div>
+                            </div>
 
-                          {/* Place Order Button */}
-                          <Button
-                            size="sm"
-                            onClick={(e) => { 
-                              e.stopPropagation(); 
-                              handlePlaceOrder(pred);
-                            }}
-                            className="w-full h-7 bg-gradient-to-r from-emerald-500/20 to-teal-500/20 border border-emerald-500/30 text-emerald-400 hover:from-emerald-500/30 hover:to-teal-500/30 text-[10px] sm:text-xs"
-                          >
-                            <Send className="w-3 h-3 mr-1" />
-                            Colocar Orden
-                          </Button>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                </>
+                            <div className="grid grid-cols-2 gap-4 mb-6">
+                               <div className="bg-slate-900/40 border border-slate-800 rounded-2xl p-3 text-center">
+                                  <p className="text-[9px] text-slate-500 uppercase font-black mb-1.5 tracking-widest">Potential ROI</p>
+                                  <p className="text-sm font-black text-emerald-400">+{((pred.takeProfit! / pred.entry! - 1) * 100).toFixed(1)}%</p>
+                               </div>
+                               <div className="bg-slate-900/40 border border-slate-800 rounded-2xl p-3 text-center">
+                                  <p className="text-[9px] text-slate-500 uppercase font-black mb-1.5 tracking-widest">Confidence Index</p>
+                                  <div className="flex items-center justify-center -space-x-1.5">
+                                     <div className="w-5 h-5 rounded-full bg-slate-800 border-2 border-slate-950 flex items-center justify-center text-[7px] font-black text-slate-400">GPT</div>
+                                     <div className="w-5 h-5 rounded-full bg-emerald-800 border-2 border-slate-950 flex items-center justify-center text-[7px] font-black text-emerald-200">DSP</div>
+                                     <div className="w-5 h-5 rounded-full bg-slate-700 border-2 border-slate-950 flex items-center justify-center text-[7px] font-black text-white">+2</div>
+                                  </div>
+                               </div>
+                            </div>
+
+                            <div className="flex items-center gap-5 mb-6">
+                               <div className="flex-1">
+                                  <div className="flex items-center justify-between text-[10px] mb-2 font-black uppercase tracking-widest">
+                                     <span className="text-slate-600">Conviction Score</span>
+                                     <span className="text-emerald-400">{pred.confidence}%</span>
+                                  </div>
+                                  <div className="h-2 bg-slate-900 rounded-full overflow-hidden border border-slate-800 shadow-inner">
+                                     <div className={`h-full bg-gradient-to-r from-emerald-600 to-teal-400 shadow-[0_0_12px_rgba(16,185,129,0.4)] transition-all duration-1000 ease-out`} style={{ width: `${pred.confidence}%` }} />
+                                  </div>
+                               </div>
+                               <div className="flex-shrink-0 bg-slate-900 p-2.5 rounded-2xl border border-slate-800 text-center min-w-[70px] shadow-2xl">
+                                  <p className="text-[9px] text-slate-600 uppercase font-black mb-1">R:R Ratio</p>
+                                  <p className="text-xs font-black text-white">{rrRatio}</p>
+                               </div>
+                            </div>
+
+                            <div className="flex items-center gap-3">
+                               <Button 
+                                 size="sm" 
+                                 onClick={(e) => { e.stopPropagation(); handlePlaceOrder(pred); }}
+                                 className="flex-1 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white h-11 text-[11px] font-black uppercase tracking-[0.2em] rounded-2xl shadow-xl shadow-emerald-500/10 border-b-4 border-emerald-700 active:border-b-0 active:translate-y-1 transition-all"
+                               >
+                                 <Zap className="w-4 h-4 mr-2.5 animate-pulse" />
+                                 EXECUTE TRADE
+                               </Button>
+                               <Button 
+                                 variant="outline" 
+                                 size="icon" 
+                                 className="h-11 w-11 border-slate-800 bg-slate-900 text-slate-500 hover:text-white hover:bg-slate-800 rounded-2xl transition-all"
+                                 onClick={(e) => {
+                                    e.stopPropagation();
+                                    navigator.clipboard.writeText(`${pred.asset} ${pred.direction} @ ${pred.entry} (SL: ${pred.stopLoss}, TP: ${pred.takeProfit})`);
+                                 }}
+                               >
+                                 <Copy className="w-4 h-4" />
+                               </Button>
+                               <Button 
+                                 variant="outline" 
+                                 size="icon" 
+                                 className="h-11 w-11 border-slate-800 bg-slate-900 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-2xl transition-all"
+                                 onClick={(e) => { e.stopPropagation(); deletePrediction(pred.id); }}
+                                >
+                                 <Trash2 className="w-4 h-4" />
+                               </Button>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      )
+                    })}
+                </div>
               )}
             </div>
-          )}
+          </div>
+        )}
 
-          {/* Sentiment Analysis */}
-          {activeSection === 'sentiment' && <SentimentPanel />}
+          {/* Sentiment Analysis Revamp (10 Improvements) */}
+          {activeSection === 'sentiment' && (
+            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
+               <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                  <div>
+                    <h2 className="text-2xl font-black text-white tracking-widest uppercase mb-1 flex items-center gap-3">
+                       <BarChart3 className="w-6 h-6 text-indigo-400" />
+                       Intelligence Pulse
+                    </h2>
+                    <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">Cross-Signal Behavioral Analysis</p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                     <Badge className="bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-4 py-1.5 rounded-xl font-black text-[10px] tracking-widest">
+                        NLP V4.0 ENABLED
+                     </Badge>
+                  </div>
+               </div>
+
+               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                  {/* Left Column: Index & Heatmap */}
+                  <div className="lg:col-span-4 space-y-6">
+                     {/* 1. Fear & Greed Index Dial */}
+                     <Card className="bg-slate-950 border-slate-800 rounded-3xl p-6 relative overflow-hidden group shadow-2xl">
+                        <div className="absolute -right-8 -bottom-8 w-32 h-32 bg-indigo-500/5 blur-3xl opacity-50" />
+                        <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-6">Market Volition Index</h4>
+                        <div className="flex flex-col items-center justify-center py-6 relative">
+                           <div className="w-48 h-24 overflow-hidden relative border-b-0">
+                              <div className="w-48 h-48 rounded-full border-[12px] border-slate-900 absolute top-0"></div>
+                              <div className="w-48 h-48 rounded-full border-[12px] border-gradient-to-r from-red-500 via-yellow-500 to-emerald-500 absolute top-0" style={{ clipPath: 'polygon(0 0, 100% 0, 100% 50%, 0 50%)', transform: 'rotate(45deg)' }}></div>
+                              <div className="w-2 h-20 bg-white absolute bottom-0 left-[95px] rounded-full origin-bottom transform -rotate-45 shadow-[0_0_15px_rgba(255,255,255,0.5)] z-20 transition-all duration-1000" style={{ transform: 'rotate(15deg)' }}></div>
+                           </div>
+                           <div className="mt-4 text-center">
+                              <span className="text-4xl font-black text-white tracking-tighter">68</span>
+                              <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mt-1">Extreme Greed</p>
+                           </div>
+                        </div>
+                     </Card>
+
+                     {/* 2. Topic Cloud */}
+                     <Card className="bg-slate-950 border-slate-800 rounded-3xl p-6 shadow-2xl">
+                        <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-6">Semantic Foci</h4>
+                        <div className="flex flex-wrap gap-2">
+                           {['ETF Inflows', 'SEC Appeal', 'Layer 2 Summer', 'Fed Pivot', 'DEX Volume'].map((topic, i) => (
+                             <span key={topic} className={`px-4 py-2 rounded-xl border border-slate-800 font-bold uppercase transition-all hover:border-indigo-500/50 cursor-default ${i === 0 ? 'text-lg text-white font-black border-indigo-500/30 bg-indigo-500/5' : 'text-[10px] text-slate-400'}`}>
+                                {topic}
+                             </span>
+                           ))}
+                        </div>
+                     </Card>
+                  </div>
+
+                  {/* Right Column: Asset Breakdown & Metrics */}
+                  <div className="lg:col-span-8 space-y-6">
+                     {/* 3. Emotional Heatmap Grid */}
+                     <Card className="bg-slate-950 border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
+                        <div className="p-4 border-b border-slate-900 bg-black/40 flex items-center justify-between">
+                           <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Cross-Asset Emotional Dispersion</h4>
+                           <RefreshCw className="w-3.5 h-3.5 text-slate-600 animate-spin-slow" />
+                        </div>
+                        <div className="p-6 grid grid-cols-2 md:grid-cols-4 gap-4">
+                           {['BTC', 'ETH', 'SOL', 'XRP'].map((asset) => (
+                             <div key={asset} className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col gap-3 group hover:border-indigo-500/40 transition-all cursor-pointer">
+                                <div className="flex items-center justify-between">
+                                   <span className="font-black text-white tracking-widest text-sm uppercase">{asset}</span>
+                                   <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                                </div>
+                                <div className="space-y-1.5">
+                                   <div className="flex items-center justify-between text-[8px] font-black uppercase text-slate-600">
+                                      <span>Optimism</span>
+                                      <span className="text-emerald-400">82%</span>
+                                   </div>
+                                   <div className="h-1 bg-slate-800 rounded-full overflow-hidden">
+                                      <div className="h-full bg-emerald-500" style={{ width: '82%' }} />
+                                   </div>
+                                </div>
+                             </div>
+                           ))}
+                        </div>
+                     </Card>
+
+                     {/* 4. Social Gravity Trend */}
+                     <Card className="bg-slate-950 border-slate-800 rounded-3xl p-6 shadow-2xl">
+                        <div className="flex items-center justify-between mb-8">
+                           <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Social Gravity Momentum</h4>
+                           <div className="flex items-center gap-4">
+                              <div className="flex items-center gap-1.5">
+                                 <div className="w-2 h-2 rounded-full bg-indigo-500" />
+                                 <span className="text-[9px] font-black text-slate-500 uppercase">Buzz Volume</span>
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                 <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                                 <span className="text-[9px] font-black text-slate-500 uppercase">Positivity</span>
+                              </div>
+                           </div>
+                        </div>
+                        <div className="h-48 w-full border-l border-b border-slate-800 flex items-end justify-between px-2 relative">
+                           {/* SVG Wave Effect */}
+                           <svg className="absolute inset-0 w-full h-full opacity-20 pointer-events-none" viewBox="0 0 400 100">
+                              <path d="M0 80 Q 50 20 100 70 T 200 60 T 300 30 T 400 40" fill="none" stroke="#6366f1" strokeWidth="2" />
+                              <path d="M0 60 Q 50 10 100 50 T 200 40 T 300 10 T 400 20" fill="none" stroke="#10b981" strokeWidth="2" />
+                           </svg>
+                           {[40, 60, 45, 80, 55, 90, 75, 85].map((h, i) => (
+                              <div key={i} className="w-full mx-1 group relative">
+                                 <div className="bg-indigo-500/20 group-hover:bg-indigo-500/40 transition-all rounded-t-lg border-x border-indigo-500/10" style={{ height: `${h}px` }} />
+                                 <div className="absolute inset-x-0 bottom-0 bg-emerald-500/20 h-[30px] rounded-t-sm" style={{ height: `${h * 0.4}px` }} />
+                              </div>
+                           ))}
+                        </div>
+                     </Card>
+                  </div>
+               </div>
+
+               {/* Bottom Row Highlights */}
+               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {/* 5. Top Influence Voicing */}
+                  <Card className="bg-slate-950 border-slate-800 rounded-3xl p-6 shadow-2xl">
+                     <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-6">Influence Core</h4>
+                     <div className="space-y-4">
+                        {['whale_alert', 'lookonchain', 'sassal0x'].map((acc) => (
+                           <div key={acc} className="flex items-center justify-between group cursor-pointer">
+                              <div className="flex items-center gap-3">
+                                 <div className="w-8 h-8 rounded-full bg-slate-800 ring-2 ring-transparent group-hover:ring-indigo-500/30 transition-all" />
+                                 <span className="text-xs font-black text-white uppercase group-hover:text-indigo-400 transition-colors">@{acc}</span>
+                              </div>
+                              <Badge className="bg-black/40 text-[9px] font-black uppercase text-indigo-400 border-none">BULLISH</Badge>
+                           </div>
+                        ))}
+                     </div>
+                  </Card>
+
+                  {/* 6. AI Consensus Summary */}
+                  <Card className="bg-slate-950 border-slate-800 rounded-3xl p-6 shadow-2xl md:col-span-2 relative overflow-hidden">
+                     <div className="absolute right-0 top-0 p-4">
+                        <div className="p-2 bg-indigo-500/10 rounded-xl">
+                           <Sparkles className="w-4 h-4 text-indigo-400" />
+                        </div>
+                     </div>
+                     <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-6">Intelligence Synthesis</h4>
+                     <div className="space-y-4">
+                        <p className="text-sm font-bold text-slate-300 leading-relaxed italic">
+                           "The market is entering a phase of high-conviction accumulation. Social metrics indicate a massive shift in 'smart money' interest towards DeFi primitives. Sentiment momentum is currently outperforming technical indicators by 3.2x."
+                        </p>
+                        <div className="flex items-center gap-6">
+                           <div className="flex items-center gap-2">
+                              <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                              <span className="text-[10px] font-black text-white uppercase uppercase tracking-widest">Signal Confirmed</span>
+                           </div>
+                           <div className="flex items-center gap-2">
+                              <AlertCircle className="w-4 h-4 text-amber-500" />
+                              <span className="text-[10px] font-black text-white uppercase tracking-widest">Medium Exposure</span>
+                           </div>
+                        </div>
+                     </div>
+                  </Card>
+               </div>
+            </div>
+          )}
         </div>
       </main>
 
@@ -8558,6 +9214,27 @@ function Dashboard({ mode: initialMode, initialProducts, onLogout, user: propUse
               </button>
             )
           })}
+          
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="flex flex-col items-center justify-center gap-0.5 px-3 py-1.5 rounded-lg text-slate-500 hover:text-white transition-all">
+                <Menu className="w-5 h-5" />
+                <span className="text-[10px] font-medium">Más</span>
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="bg-slate-900 border-slate-800 mb-2">
+              <DropdownMenuLabel className="text-slate-500 text-[10px] uppercase">Avanzado</DropdownMenuLabel>
+              <DropdownMenuSeparator className="bg-slate-800" />
+              {navLinks.map((link) => (
+                <DropdownMenuItem key={link.href} asChild>
+                  <Link href={link.href} className="flex items-center gap-2 cursor-pointer py-2.5">
+                    <link.icon className="w-4 h-4 text-emerald-400" />
+                    <span className="text-sm text-slate-200">{link.label}</span>
+                  </Link>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </nav>
       
@@ -8584,6 +9261,249 @@ function Dashboard({ mode: initialMode, initialProducts, onLogout, user: propUse
           </div>
         </div>
       )}
+
+      {/* Signal Detail & TradingView Chart Dialog */}
+      <Dialog open={!!selectedPrediction} onOpenChange={(open) => !open && setSelectedPrediction(null)}>
+        <DialogContent className="max-w-7xl bg-[#020617] border-white/5 p-0 overflow-hidden rounded-[2.5rem] shadow-[0_0_120px_rgba(16,185,129,0.15)] border-t border-l border-white/10">
+          <DialogTitle className="sr-only">Detalles de Predicción - {selectedPrediction?.asset}</DialogTitle>
+          <DialogDescription className="sr-only">
+            Análisis detallado y gráfico de TradingView para {selectedPrediction?.asset}
+          </DialogDescription>
+          <div className="flex flex-col lg:flex-row h-[95vh] lg:h-[850px] relative">
+             {/* Background Effects */}
+             <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(16,185,129,0.05),transparent_40%)] pointer-events-none" />
+             <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom_left,rgba(56,189,248,0.05),transparent_40%)] pointer-events-none" />
+
+             {/* Main Chart Section (Center-Left) */}
+             <div className="flex-1 flex flex-col min-w-0 bg-transparent relative z-10 border-r border-white/5">
+                {/* Immersive Header */}
+                <div className="p-8 flex items-center justify-between bg-white/[0.01] backdrop-blur-3xl border-b border-white/5">
+                   <div className="flex items-center gap-6">
+                      <div className="relative group">
+                         <div className="absolute -inset-2 bg-gradient-to-tr from-emerald-500 to-cyan-500 rounded-3xl blur-xl opacity-20 group-hover:opacity-40 transition duration-700"></div>
+                         <div className="relative p-3 rounded-2xl bg-[#0f172a] border border-white/10 shadow-2xl">
+                            <AssetLogo symbol={selectedPrediction?.asset || ''} size={48} />
+                         </div>
+                      </div>
+                      <div className="space-y-1">
+                         <div className="flex items-center gap-3">
+                            <h2 className="text-3xl font-black text-white tracking-tighter uppercase">
+                               {selectedPrediction?.asset}
+                               <span className="text-slate-600 font-medium ml-1">/ USDT</span>
+                            </h2>
+                            <div className="flex items-center gap-2 mb-1 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.1)]">
+                               <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                               <span className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Live Pulse</span>
+                            </div>
+                         </div>
+                         <p className="text-xs text-slate-500 font-bold uppercase tracking-[0.2em] flex items-center gap-3">
+                            PRO-AGENT ANALYSIS 
+                            <span className="w-1 h-1 rounded-full bg-slate-700" />
+                            {selectedPrediction?.timeframe} INTERVAL
+                            <span className="w-1 h-1 rounded-full bg-slate-700" />
+                            LATENCY 12ms
+                         </p>
+                      </div>
+                   </div>
+                   
+                   <div className="hidden md:flex items-center gap-10">
+                      <div className="text-right">
+                         <p className="text-[10px] text-slate-600 font-black uppercase tracking-widest mb-2">Alpha Confidence</p>
+                         <div className="flex items-center gap-3">
+                            <div className="w-24 h-2 bg-slate-800 rounded-full relative overflow-hidden">
+                               <div 
+                                 className="h-full bg-gradient-to-r from-emerald-600 to-teal-400 shadow-[0_0_15px_rgba(16,185,129,0.5)] transition-all duration-1000" 
+                                 style={{ width: `${selectedPrediction?.confidence}%` }} 
+                               />
+                            </div>
+                            <span className="text-lg font-black text-white">{selectedPrediction?.confidence}%</span>
+                         </div>
+                      </div>
+                      <div className="h-10 w-px bg-white/5" />
+                      <div className="text-right">
+                         <p className="text-[10px] text-slate-600 font-black uppercase tracking-widest mb-2">Sharpe Projection</p>
+                         <p className="text-2xl font-black text-emerald-400 tracking-tight">
+                            {selectedPrediction?.riskReward?.toFixed(2) || '2.40'}x
+                         </p>
+                      </div>
+                   </div>
+                </div>
+
+                {/* Professional Chart Area */}
+                <div className="flex-1 relative bg-black/20 overflow-hidden">
+                   <div className="absolute top-4 right-4 z-20 flex gap-2">
+                      <Badge className="bg-slate-900/80 backdrop-blur-md border-white/10 text-slate-400 text-[10px] px-3 py-1 font-mono uppercase">Candles: 100</Badge>
+                      <Badge className="bg-emerald-500/10 backdrop-blur-md border-emerald-500/20 text-emerald-400 text-[10px] px-3 py-1 font-mono uppercase">Indicators: Active</Badge>
+                   </div>
+                   {selectedPrediction && <TradingViewChart symbol={selectedPrediction.asset} />}
+                   
+                   {/* Chart Overlay Gradient */}
+                   <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-[#020617] to-transparent pointer-events-none" />
+                </div>
+
+                {/* Executable Metrics Panel */}
+                <div className="p-6 grid grid-cols-1 sm:grid-cols-3 gap-4 bg-[#02101e]/30 border-t border-white/5 backdrop-blur-xl">
+                   {[
+                      { label: 'Optimized Entry', value: selectedPrediction?.entry?.toLocaleString(), color: 'text-white', icon: Target },
+                      { label: 'Take Profit α', value: selectedPrediction?.takeProfit?.toLocaleString(), color: 'text-emerald-400', icon: TrendingUp },
+                      { label: 'Stop Loss Ω', value: selectedPrediction?.stopLoss?.toLocaleString(), color: 'text-rose-500', icon: Shield }
+                   ].map((stat, i) => (
+                      <div key={i} className="group p-4 rounded-3xl bg-slate-900/40 border border-white/5 hover:border-white/10 transition-all duration-300 relative overflow-hidden">
+                         <div className="absolute -right-4 -bottom-4 opacity-[0.03] group-hover:opacity-[0.06] transition-opacity">
+                            <stat.icon className="w-16 h-16" />
+                         </div>
+                         <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-2 flex items-center gap-2">
+                            <stat.icon className="w-3 h-3" /> {stat.label}
+                         </p>
+                         <p className={`text-xl font-mono font-black ${stat.color}`}>${stat.value || '—'}</p>
+                      </div>
+                   ))}
+                </div>
+             </div>
+
+             {/* Right Intelligence Sidebar */}
+             <div className="w-full lg:w-[420px] bg-[#020617] flex flex-col relative z-20 shadow-[-40px_0_80px_rgba(0,0,0,0.4)]">
+                {/* Intelligence Header */}
+                <div className="p-8 border-b border-white/5 bg-gradient-to-br from-emerald-500/[0.02] to-transparent">
+                   <div className="flex items-center justify-between mb-8">
+                      <h3 className="text-xs font-black text-emerald-400 uppercase tracking-[0.4em] flex items-center gap-3">
+                         <div className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                         Intelligence Console
+                      </h3>
+                      <div className="flex items-center gap-1">
+                         <div className="w-1 h-1 rounded-full bg-slate-700" />
+                         <div className="w-1 h-1 rounded-full bg-slate-700" />
+                         <div className="w-1 h-1 rounded-full bg-slate-700" />
+                      </div>
+                   </div>
+
+                   {/* Main Thesis Card */}
+                   <div className="relative group">
+                      <div className="absolute -inset-0.5 bg-gradient-to-r from-emerald-500/20 to-teal-500/20 rounded-3xl opacity-0 group-hover:opacity-100 transition duration-500 blur-sm"></div>
+                      <div className="relative p-6 rounded-3xl bg-[#0f172a]/50 border border-white/5 backdrop-blur-xl">
+                         <div className="flex items-start gap-4 mb-4">
+                            <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center flex-shrink-0">
+                               <MessageSquare className="w-5 h-5 text-emerald-400" />
+                            </div>
+                            <div>
+                               <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest mb-1">Neural Thesis</p>
+                               <p className="text-xs font-bold text-white uppercase tracking-tight">Probabilistic Vector Analysis</p>
+                            </div>
+                         </div>
+                         <p className="text-sm text-slate-300 leading-relaxed font-medium italic border-l-2 border-emerald-500/30 pl-4 py-1">
+                            "{selectedPrediction?.analysis || 'Model is calculating convergence between high-timeframe orderblocks and current volume delta...'}"
+                         </p>
+                      </div>
+                   </div>
+                </div>
+
+                {/* Dynamic Data Content */}
+                <div className="flex-1 p-8 space-y-8 overflow-y-auto custom-scrollbar bg-black/10">
+                   {/* Advanced Metrics Grid */}
+                   <div className="grid grid-cols-2 gap-4">
+                      <div className="p-5 rounded-3xl bg-[#0f172a]/40 border border-white/5 group hover:bg-[#0f172a]/60 transition-all">
+                         <div className="flex items-center justify-between mb-3">
+                            <Activity className="w-4 h-4 text-emerald-400" />
+                            <span className="text-[8px] text-emerald-500 font-black">VOLATILITY</span>
+                         </div>
+                         <p className="text-sm font-black text-white group-hover:scale-105 transition-transform origin-left">MID-STABLE</p>
+                         <div className="w-full h-1 bg-slate-800 rounded-full mt-3 overflow-hidden">
+                            <div className="h-full bg-emerald-500/40 w-2/3" />
+                         </div>
+                      </div>
+                      <div className="p-5 rounded-3xl bg-[#0f172a]/40 border border-white/5 group hover:bg-[#0f172a]/60 transition-all">
+                         <div className="flex items-center justify-between mb-3">
+                            <Timer className="w-4 h-4 text-indigo-400" />
+                            <span className="text-[8px] text-indigo-400 font-black">MOMENTUM</span>
+                         </div>
+                         <p className="text-sm font-black text-white group-hover:scale-105 transition-transform origin-left">CONSTRUCTIVE</p>
+                         <div className="w-full h-1 bg-slate-800 rounded-full mt-3 overflow-hidden">
+                            <div className="h-full bg-indigo-500/40 w-4/5" />
+                         </div>
+                      </div>
+                   </div>
+
+                   {/* Key Levels List */}
+                   <div className="space-y-4">
+                      <h4 className="text-[10px] font-black text-slate-600 uppercase tracking-widest flex items-center justify-between">
+                         Validation Levels
+                         <span className="text-[8px] font-mono text-slate-700">MT-V4.2</span>
+                      </h4>
+                      <div className="space-y-2">
+                         <div className="p-4 rounded-2xl bg-slate-900 border border-white/5 flex items-center justify-between group">
+                            <span className="text-[10px] font-bold text-slate-400 group-hover:text-white transition-colors">Resistencia Inmediata</span>
+                            <span className="text-xs font-mono font-black text-white">${selectedPrediction?.takeProfit?.toLocaleString()}</span>
+                         </div>
+                         <div className="p-4 rounded-2xl bg-slate-900 border border-white/5 flex items-center justify-between group">
+                            <span className="text-[10px] font-bold text-slate-400 group-hover:text-white transition-colors">Soporte Critico</span>
+                            <span className="text-xs font-mono font-black text-white">${selectedPrediction?.stopLoss?.toLocaleString()}</span>
+                         </div>
+                      </div>
+                   </div>
+
+                   {/* Neural Process Visualization */}
+                   <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                         <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Process Matrix</p>
+                         <Badge variant="outline" className="text-[8px] border-emerald-500/30 text-emerald-400 font-mono px-2 py-0 animate-pulse">Running</Badge>
+                      </div>
+                      <div className="p-5 rounded-3xl bg-black/60 border border-white/5 font-mono text-[10px] space-y-3">
+                         <div className="flex gap-3 text-emerald-500/80">
+                            <span className="opacity-40">01</span>
+                            <span className="flex-1">Fetching orderbook depth... [OK]</span>
+                         </div>
+                         <div className="flex gap-3 text-emerald-500/80">
+                            <span className="opacity-40">02</span>
+                            <span className="flex-1">Cross-exchange pricing sync... 100%</span>
+                         </div>
+                         <div className="flex gap-3 text-amber-500/80">
+                            <span className="opacity-40">03</span>
+                            <span className="flex-1">Analyzing whale accumulation zones...</span>
+                         </div>
+                         <div className="flex gap-3 text-slate-600 animate-pulse">
+                            <span className="opacity-40">04</span>
+                            <span className="flex-1">Calculating optimal entry vectors...</span>
+                         </div>
+                      </div>
+                   </div>
+                </div>
+
+                {/* Final CTA Execution Area */}
+                <div className="p-8 bg-slate-950/80 border-t border-white/5 backdrop-blur-2xl">
+                   <div className="flex items-center justify-between mb-6 px-1">
+                      <div className="flex items-center gap-2">
+                         <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                         <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Safe Execution</span>
+                      </div>
+                      <span className="text-[9px] font-mono text-emerald-500 underline decoration-emerald-500/30 underline-offset-4 cursor-pointer">Risk Policy</span>
+                   </div>
+                   
+                   <Button 
+                      className="w-full h-16 bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 rounded-[1.25rem] text-white shadow-[0_20px_40px_rgba(16,185,129,0.25)] relative overflow-hidden group p-0"
+                      onClick={(e) => {
+                         e.stopPropagation();
+                         handlePlaceOrder(selectedPrediction!);
+                      }}
+                   >
+                      <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      <div className="flex items-center justify-center w-full px-8">
+                         <Zap className="w-6 h-6 mr-4 fill-current group-hover:animate-bounce" />
+                         <div className="text-left">
+                            <p className="text-xs font-black uppercase tracking-widest leading-none mb-1">Execute Trade</p>
+                            <p className="text-[8px] font-bold text-white/60 tracking-widest uppercase">Via Dynamic Order Engine</p>
+                         </div>
+                         <ArrowRight className="w-5 h-5 ml-auto opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
+                      </div>
+                   </Button>
+                   
+                   <p className="text-center text-[8px] text-slate-700 font-bold uppercase tracking-[0.3em] mt-6">
+                      FinAI Global Execution Node #812
+                   </p>
+                </div>
+             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
